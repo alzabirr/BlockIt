@@ -41,9 +41,13 @@ dependencies:
   liquid_glass_widgets: ^0.12.8
   glassmorphism_ui: ^0.3.0
   blur: ^4.0.0
+  shared_preferences: ^2.5.5
+  flutter_foreground_task: ^9.2.2
+  permission_handler: ^12.0.0
+  installed_apps: ^2.1.1
 
 dev_dependencies:
-  flutter_test:
+  flutter_test: 
     sdk: flutter
   hive_generator: ^2.0.1
   build_runner: ^2.4.9

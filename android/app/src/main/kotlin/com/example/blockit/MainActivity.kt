@@ -1,18 +1,26 @@
-package com.example.snap
+package com.example.blockit
 
+import android.app.AppOpsManager
 import android.app.DownloadManager
+import android.app.usage.UsageStatsManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Process
+import android.provider.Settings
+import android.text.TextUtils
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.util.Calendar
+import java.util.HashMap
 
 class MainActivity : FlutterActivity() {
     private val modelPrefs by lazy {
@@ -36,6 +44,102 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "screen_guard/usage")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getTodayUsage" -> {
+                        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+                        val calendar = Calendar.getInstance()
+                        val endTime = calendar.timeInMillis
+
+                        calendar.set(Calendar.HOUR_OF_DAY, 0)
+                        calendar.set(Calendar.MINUTE, 0)
+                        calendar.set(Calendar.SECOND, 0)
+                        calendar.set(Calendar.MILLISECOND, 0)
+                        val startTime = calendar.timeInMillis
+
+                        val usageStats = usageStatsManager.queryUsageStats(
+                            UsageStatsManager.INTERVAL_DAILY,
+                            startTime,
+                            endTime
+                        )
+
+                        val usageMap = HashMap<String, Long>()
+                        if (usageStats != null) {
+                            for (stats in usageStats) {
+                                val totalTime = stats.totalTimeInForeground
+                                if (totalTime > 0) {
+                                    val current = usageMap[stats.packageName] ?: 0L
+                                    usageMap[stats.packageName] = current + totalTime
+                                }
+                            }
+                        }
+                        result.success(usageMap)
+                    }
+                    "hasUsagePermission" -> {
+                        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+                        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            appOps.unsafeCheckOpNoThrow(
+                                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                                android.os.Process.myUid(),
+                                packageName
+                            )
+                        } else {
+                            appOps.checkOpNoThrow(
+                                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                                android.os.Process.myUid(),
+                                packageName
+                            )
+                        }
+                        result.success(mode == AppOpsManager.MODE_ALLOWED)
+                    }
+                    "requestUsagePermission" -> {
+                        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                            data = Uri.fromParts("package", packageName, null)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        try {
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            val fallbackIntent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(fallbackIntent)
+                        }
+                        result.success(true)
+                    }
+                    "hasAccessibilityPermission" -> {
+                        val expectedComponentName = ComponentName(this, BlockAccessibilityService::class.java)
+                        val enabledServicesSetting = Settings.Secure.getString(
+                            contentResolver,
+                            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                        )
+                        var isEnabled = false
+                        if (enabledServicesSetting != null) {
+                            val colonSplitter = TextUtils.SimpleStringSplitter(':')
+                            colonSplitter.setString(enabledServicesSetting)
+                            while (colonSplitter.hasNext()) {
+                                val componentNameString = colonSplitter.next()
+                                val enabledService = ComponentName.unflattenFromString(componentNameString)
+                                if (enabledService != null && enabledService == expectedComponentName) {
+                                    isEnabled = true
+                                    break
+                                }
+                            }
+                        }
+                        result.success(isEnabled)
+                    }
+                    "requestAccessibilityPermission" -> {
+                        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "snap/share")
             .setMethodCallHandler { call, result ->

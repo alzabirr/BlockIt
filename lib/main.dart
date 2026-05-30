@@ -1,10 +1,67 @@
-
+import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'models/app_limit.dart';
 import 'screens/home_screen.dart';
-import 'storage/hive_storage.dart';
+import 'services/block_service.dart';
+import 'services/usage_stats_service.dart';
 import 'themes/app_theme.dart';
+
+// The callback function must be a top-level function.
+@pragma('vm:entry-point')
+void startCallback() {
+  FlutterForegroundTask.setTaskHandler(MyTaskHandler());
+}
+
+class MyTaskHandler extends TaskHandler {
+  @override
+  Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
+    // Service started
+  }
+
+  @override
+  void onRepeatEvent(DateTime timestamp) {
+    _checkUsage();
+  }
+
+  Future<void> _checkUsage() async {
+    try {
+      // Get today's usage from native MethodChannel
+      final Map<String, int> todayUsage = await UsageStatsService.getTodayUsage();
+
+      // Load limits from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final String? limitsJson = prefs.getString('app_limits');
+      if (limitsJson != null) {
+        final List<dynamic> decoded = jsonDecode(limitsJson);
+        final List<AppLimit> limits = decoded.map((item) => AppLimit.fromJson(item)).toList();
+
+        List<String> blockedPackages = [];
+        for (var limit in limits) {
+          final usageMs = todayUsage[limit.packageName] ?? 0;
+          final usedMins = (usageMs / 1000 / 60).round();
+          if (usedMins >= limit.limitMinutes) {
+            blockedPackages.add(limit.packageName);
+          }
+        }
+
+        // Write blocked packages to SharedPreferences
+        await prefs.setStringList('blocked_packages', blockedPackages);
+      }
+    } catch (e) {
+      print('Error in background repeat task: $e');
+    }
+  }
+
+  @override
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
+    // Service destroyed
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,16 +81,42 @@ void main() async {
   );
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-  // Initialize offline Hive storage and adapters
-  await HiveStorage.init();
+  // Initialize foreground task options
+  FlutterForegroundTask.init(
+    androidNotificationOptions: AndroidNotificationOptions(
+      channelId: 'screen_guard_service',
+      channelName: 'Screen Guard Service',
+      channelDescription: 'Monitors screen time limits in the background.',
+      channelImportance: NotificationChannelImportance.LOW,
+      priority: NotificationPriority.LOW,
+    ),
+    iosNotificationOptions: const IOSNotificationOptions(
+      showNotification: true,
+      playSound: false,
+    ),
+    foregroundTaskOptions: ForegroundTaskOptions(
+      eventAction: ForegroundTaskEventAction.repeat(60000), // 1 minute
+      autoRunOnBoot: true,
+      allowWakeLock: true,
+      allowWifiLock: true,
+    ),
+  );
 
-  final storage = HiveStorage();
-  
-  // Load initial Dark Mode preference
-  final isDark = storage.getSetting('darkMode', false) as bool;
-  darkModeNotifier.value = isDark;
+  // Start foreground task service
+  if (!await FlutterForegroundTask.isRunningService) {
+    await FlutterForegroundTask.startService(
+      notificationTitle: 'Screen Guard Active',
+      notificationText: 'Monitoring your daily app limits...',
+      callback: startCallback,
+    );
+  }
 
-  runApp(const SnapApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => BlockService(),
+      child: const SnapApp(),
+    ),
+  );
 }
 
 class SnapApp extends StatelessWidget {
@@ -45,7 +128,7 @@ class SnapApp extends StatelessWidget {
       valueListenable: darkModeNotifier,
       builder: (context, isDark, child) {
         return MaterialApp(
-          title: 'Starter Kit',
+          title: 'Screen Guard',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
             brightness: isDark ? Brightness.dark : Brightness.light,
@@ -80,4 +163,3 @@ class SnapApp extends StatelessWidget {
     );
   }
 }
-
