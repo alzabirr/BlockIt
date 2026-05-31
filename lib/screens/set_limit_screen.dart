@@ -391,6 +391,9 @@ class _SetLimitScreenState extends State<SetLimitScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: darkModeNotifier,
+      builder: (context, isDark, _) {
     return Scaffold(
       backgroundColor: bgLight,
       body: SafeArea(
@@ -490,35 +493,37 @@ class _SetLimitScreenState extends State<SetLimitScreen> {
               right: 20,
               child: Row(
                 children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(28),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-                        child: Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: surface.withValues(alpha: 0.55),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: textDark.withValues(alpha: 0.15),
-                              width: 1,
+                  if (Navigator.of(context).canPop()) ...[
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(28),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+                          child: Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: surface.withValues(alpha: 0.55),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: textDark.withValues(alpha: 0.15),
+                                width: 1,
+                              ),
                             ),
-                          ),
-                          child: Center(
-                            child: Icon(
-                              CupertinoIcons.back,
-                              color: textDark,
-                              size: 23,
+                            child: Center(
+                              child: Icon(
+                                CupertinoIcons.back,
+                                color: textDark,
+                                size: 23,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
+                    const SizedBox(width: 12),
+                  ],
                   Expanded(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(28),
@@ -589,6 +594,8 @@ class _SetLimitScreenState extends State<SetLimitScreen> {
           ],
         ),
       ),
+    );
+      },
     );
   }
 }

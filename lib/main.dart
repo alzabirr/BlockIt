@@ -70,6 +70,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await HiveStorage.init();
 
+  // Load saved dark mode setting
+  final storage = HiveStorage();
+  darkModeNotifier.value = storage.getSetting('darkMode', false) as bool;
+
   // Set status bar and system navigation bar transparent
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -131,12 +135,26 @@ class NoScrollApp extends StatelessWidget {
     return ValueListenableBuilder<bool>(
       valueListenable: darkModeNotifier,
       builder: (context, isDark, child) {
+        // Update system status/nav bar icons to match current mode
+        SystemChrome.setSystemUIOverlayStyle(
+          SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+            statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+            systemNavigationBarColor: Colors.transparent,
+            systemNavigationBarDividerColor: Colors.transparent,
+            systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+            systemNavigationBarContrastEnforced: false,
+            systemStatusBarContrastEnforced: false,
+          ),
+        );
+
         return MaterialApp(
-          title: 'Screen Guard',
+          title: 'NoScroll',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
             brightness: isDark ? Brightness.dark : Brightness.light,
-            primaryColor: const Color(0xFF5E5CE6),
+            primaryColor: primary,
             scaffoldBackgroundColor: isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
             appBarTheme: AppBarTheme(
               backgroundColor: Colors.transparent,
@@ -155,10 +173,10 @@ class NoScrollApp extends StatelessWidget {
             ),
             cupertinoOverrideTheme: CupertinoThemeData(
               brightness: isDark ? Brightness.dark : Brightness.light,
-              primaryColor: const Color(0xFF5E5CE6),
+              primaryColor: primary,
               barBackgroundColor: isDark ? const Color(0xCC121212) : const Color(0xCCFFFFFF),
               scaffoldBackgroundColor: isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
-              textTheme: const CupertinoTextThemeData(primaryColor: Color(0xFF5E5CE6)),
+              textTheme: CupertinoTextThemeData(primaryColor: primary),
             ),
           ),
           home: const MainNavigationScreen(),
@@ -167,3 +185,4 @@ class NoScrollApp extends StatelessWidget {
     );
   }
 }
+

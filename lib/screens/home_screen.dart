@@ -11,6 +11,8 @@ import '../services/usage_stats_service.dart';
 import '../themes/app_theme.dart';
 import 'set_limit_screen.dart';
 import '../storage/hive_storage.dart';
+import 'package:installed_apps/installed_apps.dart';
+import 'package:installed_apps/app_info.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -393,6 +395,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: darkModeNotifier,
+      builder: (context, isDark, _) {
     final blockService = Provider.of<BlockService>(context);
 
     // Calculate total time
@@ -434,19 +439,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ).animate().fadeIn(duration: 400.ms, delay: 100.ms),
                     ],
                   ),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      color: surface.withValues(alpha: isDarkMode ? 0.3 : 0.8),
-                      child: IconButton(
-                        icon: Icon(
-                          isDarkMode ? CupertinoIcons.sun_max : CupertinoIcons.moon,
-                          color: textDark,
-                        ),
-                        onPressed: _toggleDarkMode,
-                      ),
-                    ),
-                  ),
+                  // Dark mode button removed as requested
                 ],
               ),
             ),
@@ -697,19 +690,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         'Tracked Apps',
                         style: headingStyle(fontSize: 20, fontWeight: FontWeight.bold),
                       ),
-                      TextButton(
-                        onPressed: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.push(
-                            context,
-                            CupertinoPageRoute(builder: (context) => const SetLimitScreen()),
-                          );
-                        },
-                        child: Text(
-                          '+ Add Limit',
-                          style: bodyStyle(color: primary, fontWeight: FontWeight.bold, fontSize: 15),
-                        ),
-                      ),
                     ],
                   ),
 
@@ -779,30 +759,44 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     Expanded(
                                       child: Row(
                                         children: [
-                                          Container(
-                                            width: 42,
-                                            height: 42,
-                                            decoration: BoxDecoration(
-                                              color: (isBlocked
-                                                      ? Colors.redAccent
-                                                      : isApproaching
-                                                          ? Colors.orangeAccent
-                                                          : primary)
-                                                  .withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(12),
+                                            FutureBuilder<AppInfo?>(
+                                              future: InstalledApps.getAppInfo(limit.packageName),
+                                              builder: (context, snapshot) {
+                                                final hasIcon = snapshot.hasData && snapshot.data?.icon != null;
+                                                return Container(
+                                                  width: 42,
+                                                  height: 42,
+                                                  decoration: BoxDecoration(
+                                                    color: (isBlocked
+                                                            ? Colors.redAccent
+                                                            : isApproaching
+                                                                ? Colors.orangeAccent
+                                                                : primary)
+                                                        .withValues(alpha: 0.1),
+                                                    borderRadius: BorderRadius.circular(12),
+                                                  ),
+                                                  child: hasIcon
+                                                      ? ClipRRect(
+                                                          borderRadius: BorderRadius.circular(12),
+                                                          child: Image.memory(
+                                                            snapshot.data!.icon!,
+                                                            fit: BoxFit.cover,
+                                                          ),
+                                                        )
+                                                      : Icon(
+                                                          limit.blockingMode == 'shorts_reels'
+                                                              ? CupertinoIcons.videocam_fill
+                                                              : CupertinoIcons.lock_fill,
+                                                          color: isBlocked
+                                                              ? Colors.redAccent
+                                                              : isApproaching
+                                                                  ? Colors.orangeAccent
+                                                                  : primary,
+                                                          size: 20,
+                                                        ),
+                                                );
+                                              },
                                             ),
-                                            child: Icon(
-                                              limit.blockingMode == 'shorts_reels'
-                                                  ? CupertinoIcons.videocam_fill
-                                                  : CupertinoIcons.lock_fill,
-                                              color: isBlocked
-                                                  ? Colors.redAccent
-                                                  : isApproaching
-                                                      ? Colors.orangeAccent
-                                                      : primary,
-                                              size: 20,
-                                            ),
-                                          ),
                                           const SizedBox(width: 14),
                                           Expanded(
                                             child: Column(
@@ -899,18 +893,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          HapticFeedback.lightImpact();
-          Navigator.push(
-            context,
-            CupertinoPageRoute(builder: (context) => const SetLimitScreen()),
-          );
-        },
-        backgroundColor: primary,
-        icon: const Icon(CupertinoIcons.add, color: Colors.white),
-        label: Text('Add Limit', style: bodyStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ).animate().fadeIn(delay: 600.ms).scale(),
+    );
+      },
     );
   }
 }

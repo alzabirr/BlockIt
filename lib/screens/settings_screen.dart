@@ -155,6 +155,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: darkModeNotifier,
+      builder: (context, isDark, _) {
     return Scaffold(
       backgroundColor: bgLight,
       body: AmbientBackground(
@@ -256,6 +259,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
+    );
+      },
     );
   }
 }
