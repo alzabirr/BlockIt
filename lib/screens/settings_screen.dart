@@ -165,17 +165,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Row(
                     children: [
-                       CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(44, 44),
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Icon(
-                          CupertinoIcons.chevron_left,
-                          color: textDark,
-                          size: 28,
+                      if (Navigator.of(context).canPop()) ...[
+                        CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(44, 44),
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: Icon(
+                            CupertinoIcons.chevron_left,
+                            color: textDark,
+                            size: 28,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
+                        const SizedBox(width: 12),
+                      ],
                       Text(
                         'Settings',
                         style: headingStyle(

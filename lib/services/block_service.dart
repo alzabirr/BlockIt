@@ -61,16 +61,28 @@ class BlockService extends ChangeNotifier {
         packageName: 'com.facebook.katana',
         appName: 'Facebook',
         limitMinutes: 60,
+        blockingMode: 'shorts_reels',
+        isCuriousMode: false,
+        maxScrolls: 3,
+        actionType: 'close_player',
       ),
       AppLimit(
         packageName: 'com.google.android.youtube',
         appName: 'YouTube',
         limitMinutes: 60,
+        blockingMode: 'shorts_reels',
+        isCuriousMode: false,
+        maxScrolls: 3,
+        actionType: 'close_player',
       ),
       AppLimit(
         packageName: 'com.instagram.android',
         appName: 'Instagram',
         limitMinutes: 60,
+        blockingMode: 'shorts_reels',
+        isCuriousMode: false,
+        maxScrolls: 3,
+        actionType: 'close_player',
       ),
     ];
     _saveLimitsToDisk();
@@ -82,18 +94,34 @@ class BlockService extends ChangeNotifier {
     await prefs.setString(_limitsKey, encoded);
   }
 
-  Future<void> updateLimit(String packageName, String appName, int limitMinutes) async {
+  Future<void> updateLimit(
+    String packageName,
+    String appName,
+    int limitMinutes, {
+    String blockingMode = 'shorts_reels',
+    bool isCuriousMode = false,
+    int maxScrolls = 3,
+    String actionType = 'close_player',
+  }) async {
     final index = _limits.indexWhere((l) => l.packageName == packageName);
     if (index >= 0) {
       _limits[index] = _limits[index].copyWith(
         appName: appName,
         limitMinutes: limitMinutes,
+        blockingMode: blockingMode,
+        isCuriousMode: isCuriousMode,
+        maxScrolls: maxScrolls,
+        actionType: actionType,
       );
     } else {
       _limits.add(AppLimit(
         packageName: packageName,
         appName: appName,
         limitMinutes: limitMinutes,
+        blockingMode: blockingMode,
+        isCuriousMode: isCuriousMode,
+        maxScrolls: maxScrolls,
+        actionType: actionType,
       ));
     }
     await _saveLimitsToDisk();

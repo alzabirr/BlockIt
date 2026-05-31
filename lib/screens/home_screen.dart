@@ -10,6 +10,7 @@ import '../services/block_service.dart';
 import '../services/usage_stats_service.dart';
 import '../themes/app_theme.dart';
 import 'set_limit_screen.dart';
+import '../storage/hive_storage.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,6 +21,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Timer? _refreshTimer;
+  int _challengeDay = 1;
+  bool _isCheckedInToday = false;
+  final _storage = HiveStorage();
 
   @override
   void initState() {
@@ -31,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         context.read<BlockService>().updateUsage();
       }
     });
+    _loadChallengeProgress();
   }
 
   @override
@@ -48,6 +53,51 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       service.checkPermission();
       service.checkAccessibilityPermission();
       service.updateUsage();
+      _loadChallengeProgress();
+    }
+  }
+
+  void _loadChallengeProgress() {
+    final now = DateTime.now();
+    final todayStr = "${now.year}-${now.month}-${now.day}";
+    
+    String? startStr = _storage.getSetting('challenge_start_date', null) as String?;
+    if (startStr == null) {
+      startStr = now.toIso8601String();
+      _storage.saveSetting('challenge_start_date', startStr);
+    }
+    final startDate = DateTime.parse(startStr);
+    final diffDays = now.difference(startDate).inDays + 1;
+    
+    _challengeDay = diffDays.clamp(1, 42);
+    
+    final List<dynamic> checkIns = _storage.getSetting('challenge_check_ins', []) as List<dynamic>;
+    _isCheckedInToday = checkIns.contains(todayStr);
+    
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _checkInChallenge() {
+    HapticFeedback.heavyImpact();
+    final now = DateTime.now();
+    final todayStr = "${now.year}-${now.month}-${now.day}";
+    final List<dynamic> checkIns = List.from(_storage.getSetting('challenge_check_ins', []) as List<dynamic>);
+    
+    if (!checkIns.contains(todayStr)) {
+      checkIns.add(todayStr);
+      _storage.saveSetting('challenge_check_ins', checkIns);
+      setState(() {
+        _isCheckedInToday = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🎉 Day $_challengeDay check-in complete! Stay strong!'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: accent,
+        ),
+      );
     }
   }
 
@@ -59,6 +109,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _showEditLimitBottomSheet(AppLimit limit) {
     HapticFeedback.mediumImpact();
     double sliderValue = limit.limitMinutes.toDouble();
+    String currentBlockingMode = limit.blockingMode;
+    bool isCurious = limit.isCuriousMode;
+    double scrollLimit = limit.maxScrolls.toDouble();
+    String currentAction = limit.actionType;
+
     final blockService = context.read<BlockService>();
 
     showModalBottomSheet(
@@ -98,143 +153,234 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       width: 1,
                     ),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: textMid.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(10),
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: textMid.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(16),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Configure limit for ${limit.appName}',
+                          style: headingStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
                         ),
-                        child: Icon(CupertinoIcons.app_badge_fill, color: primary, size: 32),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        limit.appName,
-                        style: headingStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        limit.packageName,
-                        style: bodyStyle(color: textMid, fontSize: 13),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 32),
-                      Text(
-                        durationText,
-                        style: headingStyle(fontSize: 32, fontWeight: FontWeight.w300, color: primary),
-                      ),
-                      const SizedBox(height: 16),
-                      SliderTheme(
-                        data: SliderThemeData(
-                          activeTrackColor: primary,
-                          inactiveTrackColor: primary.withValues(alpha: 0.2),
-                          thumbColor: primary,
-                          overlayColor: primary.withValues(alpha: 0.1),
-                          valueIndicatorColor: primary,
+                        const SizedBox(height: 20),
+                        
+                        // 1. Time Limit Slider
+                        Text(
+                          'Daily App Time: $durationText',
+                          style: bodyStyle(fontWeight: FontWeight.bold, color: primary),
                         ),
-                        child: Slider(
+                        const SizedBox(height: 8),
+                        Slider(
                           value: sliderValue,
                           min: 15,
                           max: 480,
                           divisions: 31,
+                          activeColor: primary,
+                          inactiveColor: primary.withValues(alpha: 0.2),
                           onChanged: (val) {
                             setModalState(() {
                               sliderValue = val;
                             });
                           },
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('15 min', style: bodyStyle(color: textMid)),
-                          Text('8 hours', style: bodyStyle(color: textMid)),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: CupertinoButton(
-                              padding: EdgeInsets.zero,
-                              onPressed: () {
-                                blockService.deleteLimit(limit.packageName);
-                                HapticFeedback.mediumImpact();
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Limit deleted for ${limit.appName}'),
-                                    behavior: SnackBarBehavior.floating,
-                                    backgroundColor: Colors.redAccent,
-                                  ),
-                                );
+                        
+                        const Divider(height: 32),
+
+                        // 2. Blocking Mode Selector
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Restriction Scope', style: bodyStyle(fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ChoiceChip(
+                                label: Text('Shorts & Reels Only', style: bodyStyle(color: currentBlockingMode == 'shorts_reels' ? Colors.white : textDark)),
+                                selected: currentBlockingMode == 'shorts_reels',
+                                selectedColor: primary,
+                                onSelected: (val) {
+                                  if (val) setModalState(() => currentBlockingMode = 'shorts_reels');
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ChoiceChip(
+                                label: Text('Block Entire App', style: bodyStyle(color: currentBlockingMode == 'all' ? Colors.white : textDark)),
+                                selected: currentBlockingMode == 'all',
+                                selectedColor: primary,
+                                onSelected: (val) {
+                                  if (val) setModalState(() => currentBlockingMode = 'all');
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const Divider(height: 32),
+
+                        // 3. Curious Mode Switch (Only applicable if blocking Mode is shorts_reels)
+                        if (currentBlockingMode == 'shorts_reels') ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Curious Mode', style: bodyStyle(fontWeight: FontWeight.bold)),
+                                  Text('Allow scroll limit before block', style: bodyStyle(color: textMid, fontSize: 12)),
+                                ],
+                              ),
+                              Switch(
+                                value: isCurious,
+                                activeColor: primary,
+                                onChanged: (val) {
+                                  setModalState(() => isCurious = val);
+                                },
+                              ),
+                            ],
+                          ),
+                          if (isCurious) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Max Scrolls: ${scrollLimit.round()}', style: bodyStyle(color: primary)),
+                              ],
+                            ),
+                            Slider(
+                              value: scrollLimit,
+                              min: 1,
+                              max: 20,
+                              divisions: 19,
+                              activeColor: accent,
+                              inactiveColor: accent.withValues(alpha: 0.2),
+                              onChanged: (val) {
+                                setModalState(() => scrollLimit = val);
                               },
-                              child: Container(
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5)),
-                                  borderRadius: BorderRadius.circular(buttonRadius),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  'Delete Limit',
-                                  style: bodyStyle(color: Colors.redAccent, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                          const Divider(height: 32),
+                        ],
+
+                        // 4. Action Type dropdown/selector
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Preferred Action', style: bodyStyle(fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value: currentAction,
+                          dropdownColor: surface,
+                          style: bodyStyle(),
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                          items: [
+                            DropdownMenuItem(value: 'close_player', child: Text('Close video (Go Back)', style: bodyStyle())),
+                            DropdownMenuItem(value: 'exit_app', child: Text('Exit App (Go Home)', style: bodyStyle())),
+                            DropdownMenuItem(value: 'lock_screen', child: Text('Lock Screen (API 28+)', style: bodyStyle())),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) {
+                              setModalState(() => currentAction = val);
+                            }
+                          },
+                        ),
+
+                        const SizedBox(height: 32),
+
+                        // Action Buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                onPressed: () {
+                                  blockService.deleteLimit(limit.packageName);
+                                  HapticFeedback.mediumImpact();
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Limit deleted for ${limit.appName}'),
+                                      behavior: SnackBarBehavior.floating,
+                                      backgroundColor: Colors.redAccent,
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5)),
+                                    borderRadius: BorderRadius.circular(buttonRadius),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'Delete Limit',
+                                    style: bodyStyle(color: Colors.redAccent, fontWeight: FontWeight.w600),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: CupertinoButton(
-                              padding: EdgeInsets.zero,
-                              onPressed: () {
-                                blockService.updateLimit(
-                                  limit.packageName,
-                                  limit.appName,
-                                  sliderValue.round(),
-                                );
-                                HapticFeedback.mediumImpact();
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Limit updated for ${limit.appName}'),
-                                    behavior: SnackBarBehavior.floating,
-                                    backgroundColor: primary,
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                onPressed: () {
+                                  blockService.updateLimit(
+                                    limit.packageName,
+                                    limit.appName,
+                                    sliderValue.round(),
+                                    blockingMode: currentBlockingMode,
+                                    isCuriousMode: isCurious,
+                                    maxScrolls: scrollLimit.round(),
+                                    actionType: currentAction,
+                                  );
+                                  HapticFeedback.mediumImpact();
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Limit updated for ${limit.appName}'),
+                                      behavior: SnackBarBehavior.floating,
+                                      backgroundColor: primary,
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    color: primary,
+                                    borderRadius: BorderRadius.circular(buttonRadius),
                                   ),
-                                );
-                              },
-                              child: Container(
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  color: primary,
-                                  borderRadius: BorderRadius.circular(buttonRadius),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  'Save',
-                                  style: bodyStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'Save',
+                                    style: bodyStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                    ],
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -278,12 +424,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Screen Guard',
+                        'NoScroll',
                         style: headingStyle(fontSize: 28, fontWeight: FontWeight.bold),
                       ).animate().fadeIn(duration: 400.ms).slideX(begin: -0.1, end: 0),
                       const SizedBox(height: 4),
                       Text(
-                        'Stay focused, block distractions',
+                        'Quit the doomscrolling loop',
                         style: bodyStyle(color: textMid, fontSize: 14),
                       ).animate().fadeIn(duration: 400.ms, delay: 100.ms),
                     ],
@@ -311,6 +457,92 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
                 children: [
                   const SizedBox(height: 8),
+
+                  // 6-Week Challenge Widget
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    margin: const EdgeInsets.only(bottom: 24),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [accent.withValues(alpha: 0.15), primary.withValues(alpha: 0.1)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(cardRadius),
+                      border: Border.all(
+                        color: accent.withValues(alpha: 0.2),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(CupertinoIcons.flame_fill, color: Colors.orangeAccent, size: 24),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '6-Week NoScroll Challenge',
+                                  style: headingStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                'Day $_challengeDay/42',
+                                style: bodyStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Live present, save attention span. Reclaim hours wasted scrolling short videos.',
+                          style: bodyStyle(color: textDark.withValues(alpha: 0.8), fontSize: 13),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: LinearProgressIndicator(
+                                  value: _challengeDay / 42.0,
+                                  minHeight: 12,
+                                  backgroundColor: textMid.withValues(alpha: 0.1),
+                                  valueColor: AlwaysStoppedAnimation<Color>(accent),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            CupertinoButton(
+                              padding: EdgeInsets.zero,
+                              onPressed: _isCheckedInToday ? null : _checkInChallenge,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: _isCheckedInToday ? Colors.grey.withValues(alpha: 0.3) : accent,
+                                  borderRadius: BorderRadius.circular(buttonRadius),
+                                ),
+                                child: Text(
+                                  _isCheckedInToday ? 'Checked In' : 'Check In',
+                                  style: bodyStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.97, 0.97)),
 
                   // Overview Glassmorphic Card
                   Container(
@@ -425,7 +657,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'Please grant these system permissions so Screen Guard can track usage and block applications.',
+                            'Please grant these system permissions so NoScroll can track usage and block Reels/Shorts.',
                             style: bodyStyle(height: 1.4, fontSize: 13),
                           ),
                           const SizedBox(height: 16),
@@ -446,7 +678,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             ListTile(
                               contentPadding: EdgeInsets.zero,
                               title: Text('Accessibility Blocker Service', style: bodyStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('Required to auto-block apps when limit is reached', style: bodyStyle(color: textMid, fontSize: 12)),
+                              subtitle: Text('Required to detect and block short videos scrolling', style: bodyStyle(color: textMid, fontSize: 12)),
                               trailing: Icon(CupertinoIcons.arrow_right_circle_fill, color: primary),
                               onTap: () {
                                 HapticFeedback.selectionClick();
@@ -503,6 +735,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ...blockService.limits.map((limit) {
                       final isApproaching = limit.progress >= 0.8;
                       final isBlocked = limit.isBlocked;
+                      
+                      String detailText = '';
+                      if (limit.blockingMode == 'shorts_reels') {
+                        detailText = 'Shorts/Reels Blocked';
+                        if (limit.isCuriousMode) {
+                          detailText += ' (Curious Mode: Max ${limit.maxScrolls} scrolls)';
+                        }
+                      } else {
+                        detailText = 'Entire App Blocked';
+                      }
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 16),
@@ -529,6 +771,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           child: Padding(
                             padding: const EdgeInsets.all(20),
                             child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -549,9 +792,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                               borderRadius: BorderRadius.circular(12),
                                             ),
                                             child: Icon(
-                                              isBlocked
-                                                  ? CupertinoIcons.lock_fill
-                                                  : CupertinoIcons.timer,
+                                              limit.blockingMode == 'shorts_reels'
+                                                  ? CupertinoIcons.videocam_fill
+                                                  : CupertinoIcons.lock_fill,
                                               color: isBlocked
                                                   ? Colors.redAccent
                                                   : isApproaching
@@ -621,7 +864,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 16),
+                                const SizedBox(height: 12),
+                                Text(
+                                  detailText,
+                                  style: bodyStyle(fontSize: 12, color: textMid, fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 12),
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(4),
                                   child: LinearProgressIndicator(

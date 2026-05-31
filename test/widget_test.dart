@@ -4,16 +4,16 @@ import 'package:upgrade_flutter_starter_kit/main.dart';
 import 'package:upgrade_flutter_starter_kit/services/block_service.dart';
 
 void main() {
-  testWidgets('Screen Guard SnapApp build test', (WidgetTester tester) async {
+  testWidgets('Screen Guard NoScrollApp build test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => BlockService(),
-        child: const SnapApp(),
+        child: const NoScrollApp(),
       ),
     );
 
-    // Verify Screen Guard title is present
-    expect(find.text('Screen Guard'), findsOneWidget);
+    // Verify NoScroll title is present
+    expect(find.text('NoScroll'), findsOneWidget);
   });
 }

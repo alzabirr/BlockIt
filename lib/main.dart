@@ -7,9 +7,12 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'models/app_limit.dart';
 import 'screens/home_screen.dart';
+import 'screens/main_navigation_screen.dart';
 import 'services/block_service.dart';
 import 'services/usage_stats_service.dart';
 import 'themes/app_theme.dart';
+
+import 'storage/hive_storage.dart';
 
 // The callback function must be a top-level function.
 @pragma('vm:entry-point')
@@ -65,6 +68,7 @@ class MyTaskHandler extends TaskHandler {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await HiveStorage.init();
 
   // Set status bar and system navigation bar transparent
   SystemChrome.setSystemUIOverlayStyle(
@@ -114,13 +118,13 @@ void main() async {
   runApp(
     ChangeNotifierProvider(
       create: (_) => BlockService(),
-      child: const SnapApp(),
+      child: const NoScrollApp(),
     ),
   );
 }
 
-class SnapApp extends StatelessWidget {
-  const SnapApp({super.key});
+class NoScrollApp extends StatelessWidget {
+  const NoScrollApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -157,7 +161,7 @@ class SnapApp extends StatelessWidget {
               textTheme: const CupertinoTextThemeData(primaryColor: Color(0xFF5E5CE6)),
             ),
           ),
-          home: const HomeScreen(),
+          home: const MainNavigationScreen(),
         );
       },
     );

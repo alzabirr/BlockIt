@@ -81,9 +81,20 @@ class _SetLimitScreenState extends State<SetLimitScreen> {
     // Check if there is already a limit set
     final blockService = context.read<BlockService>();
     final existingLimitIndex = blockService.limits.indexWhere((l) => l.packageName == app.packageName);
+    
     double initialLimitMinutes = 60.0;
+    String currentBlockingMode = 'shorts_reels';
+    bool isCurious = false;
+    double scrollLimit = 3.0;
+    String currentAction = 'close_player';
+
     if (existingLimitIndex >= 0) {
-      initialLimitMinutes = blockService.limits[existingLimitIndex].limitMinutes.toDouble();
+      final existing = blockService.limits[existingLimitIndex];
+      initialLimitMinutes = existing.limitMinutes.toDouble();
+      currentBlockingMode = existing.blockingMode;
+      isCurious = existing.isCuriousMode;
+      scrollLimit = existing.maxScrolls.toDouble();
+      currentAction = existing.actionType;
     }
 
     double sliderValue = initialLimitMinutes;
@@ -125,142 +136,249 @@ class _SetLimitScreenState extends State<SetLimitScreen> {
                       width: 1,
                     ),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: textMid.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(10),
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: textMid.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      if (app.icon != null)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Image.memory(
-                            app.icon!,
+                        const SizedBox(height: 24),
+                        if (app.icon != null)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.memory(
+                              app.icon!,
+                              width: 64,
+                              height: 64,
+                            ),
+                          )
+                        else
+                          Container(
                             width: 64,
                             height: 64,
+                            decoration: BoxDecoration(
+                              color: primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Icon(CupertinoIcons.app_fill, color: primary, size: 32),
                           ),
-                        )
-                      else
-                        Container(
-                          width: 64,
-                          height: 64,
-                          decoration: BoxDecoration(
-                            color: primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Icon(CupertinoIcons.app_fill, color: primary, size: 32),
+                        const SizedBox(height: 16),
+                        Text(
+                          app.name,
+                          style: headingStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
                         ),
-                      const SizedBox(height: 16),
-                      Text(
-                        app.name,
-                        style: headingStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        app.packageName,
-                        style: bodyStyle(color: textMid, fontSize: 13),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 32),
-                      Text(
-                        durationText,
-                        style: headingStyle(fontSize: 32, fontWeight: FontWeight.w300, color: primary),
-                      ),
-                      const SizedBox(height: 16),
-                      SliderTheme(
-                        data: SliderThemeData(
-                          activeTrackColor: primary,
-                          inactiveTrackColor: primary.withValues(alpha: 0.2),
-                          thumbColor: primary,
-                          overlayColor: primary.withValues(alpha: 0.1),
-                          valueIndicatorColor: primary,
+                        const SizedBox(height: 8),
+                        Text(
+                          app.packageName,
+                          style: bodyStyle(color: textMid, fontSize: 13),
+                          textAlign: TextAlign.center,
                         ),
-                        child: Slider(
+                        const SizedBox(height: 20),
+                        
+                        // 1. Time Slider
+                        Text(
+                          'Daily App Time: $durationText',
+                          style: bodyStyle(fontWeight: FontWeight.bold, color: primary),
+                        ),
+                        const SizedBox(height: 8),
+                        Slider(
                           value: sliderValue,
                           min: 15,
-                          max: 480, // 8 hours
+                          max: 480,
                           divisions: 31,
+                          activeColor: primary,
+                          inactiveColor: primary.withValues(alpha: 0.2),
                           onChanged: (val) {
                             setModalState(() {
                               sliderValue = val;
                             });
                           },
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('15 min', style: bodyStyle(color: textMid)),
-                          Text('8 hours', style: bodyStyle(color: textMid)),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: CupertinoButton(
-                              padding: EdgeInsets.zero,
-                              onPressed: () => Navigator.pop(context),
-                              child: Container(
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: textDark.withValues(alpha: 0.2)),
-                                  borderRadius: BorderRadius.circular(buttonRadius),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  'Cancel',
-                                  style: bodyStyle(fontWeight: FontWeight.w600),
-                                ),
+                        
+                        const Divider(height: 32),
+
+                        // 2. Restriction Scope Selector
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Restriction Scope', style: bodyStyle(fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ChoiceChip(
+                                label: Text('Shorts & Reels Only', style: bodyStyle(color: currentBlockingMode == 'shorts_reels' ? Colors.white : textDark)),
+                                selected: currentBlockingMode == 'shorts_reels',
+                                selectedColor: primary,
+                                onSelected: (val) {
+                                  if (val) setModalState(() => currentBlockingMode = 'shorts_reels');
+                                },
                               ),
                             ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ChoiceChip(
+                                label: Text('Block Entire App', style: bodyStyle(color: currentBlockingMode == 'all' ? Colors.white : textDark)),
+                                selected: currentBlockingMode == 'all',
+                                selectedColor: primary,
+                                onSelected: (val) {
+                                  if (val) setModalState(() => currentBlockingMode = 'all');
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const Divider(height: 32),
+
+                        // 3. Curious Mode (Shorts Only)
+                        if (currentBlockingMode == 'shorts_reels') ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Curious Mode', style: bodyStyle(fontWeight: FontWeight.bold)),
+                                  Text('Allow scroll limit before block', style: bodyStyle(color: textMid, fontSize: 12)),
+                                ],
+                              ),
+                              Switch(
+                                value: isCurious,
+                                activeColor: primary,
+                                onChanged: (val) {
+                                  setModalState(() => isCurious = val);
+                                },
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: CupertinoButton(
-                              padding: EdgeInsets.zero,
-                              onPressed: () {
-                                blockService.updateLimit(
-                                  app.packageName,
-                                  app.name,
-                                  sliderValue.round(),
-                                );
-                                HapticFeedback.mediumImpact();
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Limit set for ${app.name}'),
-                                    behavior: SnackBarBehavior.floating,
-                                    backgroundColor: primary,
-                                  ),
-                                );
+                          if (isCurious) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Max Scrolls: ${scrollLimit.round()}', style: bodyStyle(color: primary)),
+                              ],
+                            ),
+                            Slider(
+                              value: scrollLimit,
+                              min: 1,
+                              max: 20,
+                              divisions: 19,
+                              activeColor: accent,
+                              inactiveColor: accent.withValues(alpha: 0.2),
+                              onChanged: (val) {
+                                setModalState(() => scrollLimit = val);
                               },
-                              child: Container(
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  color: primary,
-                                  borderRadius: BorderRadius.circular(buttonRadius),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  'Set Limit',
-                                  style: bodyStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                          const Divider(height: 32),
+                        ],
+
+                        // 4. Action Type dropdown
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Preferred Action', style: bodyStyle(fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value: currentAction,
+                          dropdownColor: surface,
+                          style: bodyStyle(),
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                          items: [
+                            DropdownMenuItem(value: 'close_player', child: Text('Close video (Go Back)', style: bodyStyle())),
+                            DropdownMenuItem(value: 'exit_app', child: Text('Exit App (Go Home)', style: bodyStyle())),
+                            DropdownMenuItem(value: 'lock_screen', child: Text('Lock Screen (API 28+)', style: bodyStyle())),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) {
+                              setModalState(() => currentAction = val);
+                            }
+                          },
+                        ),
+
+                        const SizedBox(height: 32),
+
+                        // Actions
+                        Row(
+                          children: [
+                            Expanded(
+                              child: CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                onPressed: () => Navigator.pop(context),
+                                child: Container(
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: textDark.withValues(alpha: 0.2)),
+                                    borderRadius: BorderRadius.circular(buttonRadius),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'Cancel',
+                                    style: bodyStyle(fontWeight: FontWeight.w600),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                    ],
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                onPressed: () {
+                                  blockService.updateLimit(
+                                    app.packageName,
+                                    app.name,
+                                    sliderValue.round(),
+                                    blockingMode: currentBlockingMode,
+                                    isCuriousMode: isCurious,
+                                    maxScrolls: scrollLimit.round(),
+                                    actionType: currentAction,
+                                  );
+                                  HapticFeedback.mediumImpact();
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Limit set for ${app.name}'),
+                                      behavior: SnackBarBehavior.floating,
+                                      backgroundColor: primary,
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    color: primary,
+                                    borderRadius: BorderRadius.circular(buttonRadius),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'Set Limit',
+                                    style: bodyStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
                   ),
                 ),
               ),
