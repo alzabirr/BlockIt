@@ -9,8 +9,6 @@ import '../models/app_limit.dart';
 import '../services/block_service.dart';
 import '../services/usage_stats_service.dart';
 import '../themes/app_theme.dart';
-import 'set_limit_screen.dart';
-import '../storage/hive_storage.dart';
 import 'package:installed_apps/installed_apps.dart';
 import 'package:installed_apps/app_info.dart';
 
@@ -23,9 +21,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Timer? _refreshTimer;
-  int _challengeDay = 1;
-  bool _isCheckedInToday = false;
-  final _storage = HiveStorage();
 
   @override
   void initState() {
@@ -37,7 +32,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         context.read<BlockService>().updateUsage();
       }
     });
-    _loadChallengeProgress();
   }
 
   @override
@@ -55,57 +49,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       service.checkPermission();
       service.checkAccessibilityPermission();
       service.updateUsage();
-      _loadChallengeProgress();
     }
-  }
-
-  void _loadChallengeProgress() {
-    final now = DateTime.now();
-    final todayStr = "${now.year}-${now.month}-${now.day}";
-    
-    String? startStr = _storage.getSetting('challenge_start_date', null) as String?;
-    if (startStr == null) {
-      startStr = now.toIso8601String();
-      _storage.saveSetting('challenge_start_date', startStr);
-    }
-    final startDate = DateTime.parse(startStr);
-    final diffDays = now.difference(startDate).inDays + 1;
-    
-    _challengeDay = diffDays.clamp(1, 42);
-    
-    final List<dynamic> checkIns = _storage.getSetting('challenge_check_ins', []) as List<dynamic>;
-    _isCheckedInToday = checkIns.contains(todayStr);
-    
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  void _checkInChallenge() {
-    HapticFeedback.heavyImpact();
-    final now = DateTime.now();
-    final todayStr = "${now.year}-${now.month}-${now.day}";
-    final List<dynamic> checkIns = List.from(_storage.getSetting('challenge_check_ins', []) as List<dynamic>);
-    
-    if (!checkIns.contains(todayStr)) {
-      checkIns.add(todayStr);
-      _storage.saveSetting('challenge_check_ins', checkIns);
-      setState(() {
-        _isCheckedInToday = true;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('🎉 Day $_challengeDay check-in complete! Stay strong!'),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: accent,
-        ),
-      );
-    }
-  }
-
-  void _toggleDarkMode() {
-    HapticFeedback.lightImpact();
-    darkModeNotifier.value = !darkModeNotifier.value;
   }
 
   void _showEditLimitBottomSheet(AppLimit limit) {
@@ -168,15 +112,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         const SizedBox(height: 24),
                         Text(
                           'Configure limit for ${limit.appName}',
-                          style: headingStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          style: headingStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 20),
-                        
+
                         // 1. Time Limit Slider
                         Text(
                           'Daily App Time: $durationText',
-                          style: bodyStyle(fontWeight: FontWeight.bold, color: primary),
+                          style: bodyStyle(
+                            fontWeight: FontWeight.bold,
+                            color: primary,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Slider(
@@ -192,14 +142,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             });
                           },
                         ),
-                        
+
                         const Divider(height: 32),
 
                         // 2. Action Type dropdown/selector
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Preferred Action', style: bodyStyle(fontWeight: FontWeight.bold)),
+                            Text(
+                              'Preferred Action',
+                              style: bodyStyle(fontWeight: FontWeight.bold),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 12),
@@ -208,12 +161,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           dropdownColor: surface,
                           style: bodyStyle(),
                           decoration: InputDecoration(
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                           ),
                           items: [
-                            DropdownMenuItem(value: 'exit_app', child: Text('Exit App (Go Home)', style: bodyStyle())),
-                            DropdownMenuItem(value: 'lock_screen', child: Text('Lock Screen (API 28+)', style: bodyStyle())),
+                            DropdownMenuItem(
+                              value: 'exit_app',
+                              child: Text(
+                                'Exit App (Go Home)',
+                                style: bodyStyle(),
+                              ),
+                            ),
+                            DropdownMenuItem(
+                              value: 'lock_screen',
+                              child: Text(
+                                'Lock Screen (API 28+)',
+                                style: bodyStyle(),
+                              ),
+                            ),
                           ],
                           onChanged: (val) {
                             if (val != null) {
@@ -236,7 +206,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   Navigator.pop(context);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Limit deleted for ${limit.appName}'),
+                                      content: Text(
+                                        'Limit deleted for ${limit.appName}',
+                                      ),
                                       behavior: SnackBarBehavior.floating,
                                       backgroundColor: Colors.redAccent,
                                     ),
@@ -245,13 +217,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 child: Container(
                                   height: 50,
                                   decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5)),
-                                    borderRadius: BorderRadius.circular(buttonRadius),
+                                    border: Border.all(
+                                      color: Colors.redAccent.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                    ),
+                                    borderRadius: BorderRadius.circular(
+                                      buttonRadius,
+                                    ),
                                   ),
                                   alignment: Alignment.center,
                                   child: Text(
                                     'Delete Limit',
-                                    style: bodyStyle(color: Colors.redAccent, fontWeight: FontWeight.w600),
+                                    style: bodyStyle(
+                                      color: Colors.redAccent,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -274,7 +255,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   Navigator.pop(context);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Limit updated for ${limit.appName}'),
+                                      content: Text(
+                                        'Limit updated for ${limit.appName}',
+                                      ),
                                       behavior: SnackBarBehavior.floating,
                                       backgroundColor: primary,
                                     ),
@@ -284,12 +267,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   height: 50,
                                   decoration: BoxDecoration(
                                     color: primary,
-                                    borderRadius: BorderRadius.circular(buttonRadius),
+                                    borderRadius: BorderRadius.circular(
+                                      buttonRadius,
+                                    ),
                                   ),
                                   alignment: Alignment.center,
                                   child: Text(
                                     'Save',
-                                    style: bodyStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                    style: bodyStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -314,492 +302,422 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return ValueListenableBuilder<bool>(
       valueListenable: darkModeNotifier,
       builder: (context, isDark, _) {
-    final blockService = Provider.of<BlockService>(context);
+        final blockService = Provider.of<BlockService>(context);
 
-    // Calculate total time
-    int totalLimit = 0;
-    int totalUsed = 0;
-    int blockedCount = 0;
-
-    for (var l in blockService.limits) {
-      totalLimit += l.limitMinutes;
-      totalUsed += l.usedMinutes;
-      if (l.isBlocked) blockedCount++;
-    }
-
-    final overallProgress = totalLimit > 0 ? (totalUsed / totalLimit).clamp(0.0, 1.0) : 0.0;
-
-    return Scaffold(
-      backgroundColor: bgLight,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        return Scaffold(
+          backgroundColor: bgLight,
+          body: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 16.0,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'NoScroll',
-                        style: headingStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                      ).animate().fadeIn(duration: 400.ms).slideX(begin: -0.1, end: 0),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Quit the doomscrolling loop',
-                        style: bodyStyle(color: textMid, fontSize: 14),
-                      ).animate().fadeIn(duration: 400.ms, delay: 100.ms),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                                'NoScroll',
+                                style: headingStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                              .animate()
+                              .fadeIn(duration: 400.ms)
+                              .slideX(begin: -0.1, end: 0),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Quit the doomscrolling loop',
+                            style: bodyStyle(color: textMid, fontSize: 14),
+                          ).animate().fadeIn(duration: 400.ms, delay: 100.ms),
+                        ],
+                      ),
+                      // Dark mode button removed as requested
                     ],
                   ),
-                  // Dark mode button removed as requested
-                ],
-              ),
-            ),
+                ),
 
-            Expanded(
-              child: ListView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                children: [
-                  const SizedBox(height: 8),
+                Expanded(
+                  child: ListView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                    children: [
+                      const SizedBox(height: 8),
 
-                  // 6-Week Challenge Widget
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    margin: const EdgeInsets.only(bottom: 24),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [accent.withValues(alpha: 0.15), primary.withValues(alpha: 0.1)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(cardRadius),
-                      border: Border.all(
-                        color: accent.withValues(alpha: 0.2),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(CupertinoIcons.flame_fill, color: Colors.orangeAccent, size: 24),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '6-Week NoScroll Challenge',
-                                  style: headingStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                                ),
-                              ],
+                      // Missing Permissions Panel
+                      if (!blockService.hasPermission ||
+                          !blockService.hasAccessibilityPermission)
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          margin: const EdgeInsets.only(bottom: 24),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(
+                              alpha: isDarkMode ? 0.1 : 0.15,
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: accent.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                'Day $_challengeDay/42',
-                                style: bodyStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 12),
-                              ),
+                            borderRadius: BorderRadius.circular(cardRadius),
+                            border: Border.all(
+                              color: Colors.amber.withValues(alpha: 0.3),
+                              width: 1,
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Live present, save attention span. Reclaim hours wasted scrolling short videos.',
-                          style: bodyStyle(color: textDark.withValues(alpha: 0.8), fontSize: 13),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: LinearProgressIndicator(
-                                  value: _challengeDay / 42.0,
-                                  minHeight: 12,
-                                  backgroundColor: textMid.withValues(alpha: 0.1),
-                                  valueColor: AlwaysStoppedAnimation<Color>(accent),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            CupertinoButton(
-                              padding: EdgeInsets.zero,
-                              onPressed: _isCheckedInToday ? null : _checkInChallenge,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: _isCheckedInToday ? Colors.grey.withValues(alpha: 0.3) : accent,
-                                  borderRadius: BorderRadius.circular(buttonRadius),
-                                ),
-                                child: Text(
-                                  _isCheckedInToday ? 'Checked In' : 'Check In',
-                                  style: bodyStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.97, 0.97)),
-
-                  // Overview Glassmorphic Card
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: isDarkMode
-                            ? [primary.withValues(alpha: 0.15), accent.withValues(alpha: 0.05)]
-                            : [primary.withValues(alpha: 0.08), accent.withValues(alpha: 0.03)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(cardRadius),
-                      border: Border.all(
-                        color: primary.withValues(alpha: 0.15),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                'Overall Usage',
-                                style: headingStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '$totalUsed mins of $totalLimit mins used',
-                                style: bodyStyle(color: textMid, fontSize: 14),
-                              ),
-                              const SizedBox(height: 16),
                               Row(
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: blockedCount > 0
-                                          ? Colors.redAccent.withValues(alpha: 0.15)
-                                          : Colors.green.withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      blockedCount > 0 ? '$blockedCount blocked' : 'All safe',
-                                      style: bodyStyle(
-                                        color: blockedCount > 0 ? Colors.redAccent : Colors.green,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                      ),
+                                  const Icon(
+                                    CupertinoIcons
+                                        .exclamationmark_triangle_fill,
+                                    color: Colors.amber,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Permissions Required',
+                                    style: headingStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.amber[800],
                                     ),
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                        ),
-                        // Sleek circular usage chart
-                        Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            SizedBox(
-                              width: 80,
-                              height: 80,
-                              child: CircularProgressIndicator(
-                                value: overallProgress,
-                                strokeWidth: 8,
-                                backgroundColor: primary.withValues(alpha: 0.1),
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  overallProgress >= 0.9 ? Colors.redAccent : primary,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              '${(overallProgress * 100).round()}%',
-                              style: headingStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ).animate().fadeIn(duration: 500.ms, delay: 200.ms).scale(begin: const Offset(0.95, 0.95)),
-
-                  const SizedBox(height: 24),
-
-                  // Missing Permissions Panel
-                  if (!blockService.hasPermission || !blockService.hasAccessibilityPermission)
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      margin: const EdgeInsets.only(bottom: 24),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withValues(alpha: isDarkMode ? 0.1 : 0.15),
-                        borderRadius: BorderRadius.circular(cardRadius),
-                        border: Border.all(
-                          color: Colors.amber.withValues(alpha: 0.3),
-                          width: 1,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(CupertinoIcons.exclamationmark_triangle_fill, color: Colors.amber, size: 24),
-                              const SizedBox(width: 8),
+                              const SizedBox(height: 12),
                               Text(
-                                'Permissions Required',
-                                style: headingStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amber[800]),
+                                'Please grant these system permissions so NoScroll can track usage and block apps after their limits.',
+                                style: bodyStyle(height: 1.4, fontSize: 13),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Please grant these system permissions so NoScroll can track usage and block apps after their limits.',
-                            style: bodyStyle(height: 1.4, fontSize: 13),
-                          ),
-                          const SizedBox(height: 16),
-                          if (!blockService.hasPermission)
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text('Usage Statistics Access', style: bodyStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('Required to track today\'s screen time', style: bodyStyle(color: textMid, fontSize: 12)),
-                              trailing: Icon(CupertinoIcons.arrow_right_circle_fill, color: primary),
-                              onTap: () {
-                                HapticFeedback.selectionClick();
-                                UsageStatsService.requestUsagePermission();
-                              },
-                            ),
-                          if (!blockService.hasPermission && !blockService.hasAccessibilityPermission)
-                            const Divider(height: 1),
-                          if (!blockService.hasAccessibilityPermission)
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text('Accessibility Blocker Service', style: bodyStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('Required to close or lock blocked apps', style: bodyStyle(color: textMid, fontSize: 12)),
-                              trailing: Icon(CupertinoIcons.arrow_right_circle_fill, color: primary),
-                              onTap: () {
-                                HapticFeedback.selectionClick();
-                                UsageStatsService.requestAccessibilityPermission();
-                              },
-                            ),
-                        ],
-                      ),
-                    ).animate().fadeIn(duration: 400.ms),
-
-                  // Section Title
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Tracked Apps',
-                        style: headingStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // App list
-                  if (blockService.limits.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(40),
-                      alignment: Alignment.center,
-                      child: Column(
-                        children: [
-                          Icon(CupertinoIcons.app_badge_fill, size: 64, color: textMid.withValues(alpha: 0.3)),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No app limits set yet.',
-                            style: bodyStyle(color: textMid, fontSize: 15),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    ...blockService.limits.map((limit) {
-                      final isApproaching = limit.progress >= 0.8;
-                      final isBlocked = limit.isBlocked;
-                      
-                      const detailText = 'Entire App Blocked';
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: surface.withValues(alpha: isDarkMode ? 0.4 : 0.8),
-                          borderRadius: BorderRadius.circular(cardRadius),
-                          border: Border.all(
-                            color: isBlocked
-                                ? Colors.redAccent.withValues(alpha: 0.3)
-                                : textDark.withValues(alpha: 0.05),
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.02),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: InkWell(
-                          onTap: () => _showEditLimitBottomSheet(limit),
-                          borderRadius: BorderRadius.circular(cardRadius),
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Row(
-                                        children: [
-                                            FutureBuilder<AppInfo?>(
-                                              future: InstalledApps.getAppInfo(limit.packageName),
-                                              builder: (context, snapshot) {
-                                                final hasIcon = snapshot.hasData && snapshot.data?.icon != null;
-                                                return Container(
-                                                  width: 42,
-                                                  height: 42,
-                                                  decoration: BoxDecoration(
-                                                    color: (isBlocked
-                                                            ? Colors.redAccent
-                                                            : isApproaching
-                                                                ? Colors.orangeAccent
-                                                                : primary)
-                                                        .withValues(alpha: 0.1),
-                                                    borderRadius: BorderRadius.circular(12),
-                                                  ),
-                                                  child: hasIcon
-                                                      ? ClipRRect(
-                                                          borderRadius: BorderRadius.circular(12),
-                                                          child: Image.memory(
-                                                            snapshot.data!.icon!,
-                                                            fit: BoxFit.cover,
-                                                          ),
-                                                        )
-                                                      : Icon(
-                                                          CupertinoIcons.lock_fill,
-                                                          color: isBlocked
-                                                              ? Colors.redAccent
-                                                              : isApproaching
-                                                                  ? Colors.orangeAccent
-                                                                  : primary,
-                                                          size: 20,
-                                                        ),
-                                                );
-                                              },
-                                            ),
-                                          const SizedBox(width: 14),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  limit.appName,
-                                                  style: bodyStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  limit.packageName,
-                                                  style: bodyStyle(color: textMid, fontSize: 12),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          '${limit.usedMinutes} / ${limit.limitMinutes}m',
-                                          style: headingStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            color: isBlocked
-                                                ? Colors.redAccent
-                                                : isApproaching
-                                                    ? Colors.orangeAccent
-                                                    : textDark,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: isBlocked
-                                                ? Colors.redAccent.withValues(alpha: 0.1)
-                                                : Colors.green.withValues(alpha: 0.1),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Text(
-                                            isBlocked ? 'Blocked' : 'Active',
-                                            style: bodyStyle(
-                                              color: isBlocked ? Colors.redAccent : Colors.green,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 10,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  detailText,
-                                  style: bodyStyle(fontSize: 12, color: textMid, fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(height: 12),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: LinearProgressIndicator(
-                                    value: limit.progress,
-                                    minHeight: 6,
-                                    backgroundColor: textMid.withValues(alpha: 0.1),
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      isBlocked
-                                          ? Colors.redAccent
-                                          : isApproaching
-                                              ? Colors.orangeAccent
-                                              : primary,
+                              const SizedBox(height: 16),
+                              if (!blockService.hasPermission)
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: Text(
+                                    'Usage Statistics Access',
+                                    style: bodyStyle(
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
+                                  subtitle: Text(
+                                    'Required to track today\'s screen time',
+                                    style: bodyStyle(
+                                      color: textMid,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  trailing: Icon(
+                                    CupertinoIcons.arrow_right_circle_fill,
+                                    color: primary,
+                                  ),
+                                  onTap: () {
+                                    HapticFeedback.selectionClick();
+                                    UsageStatsService.requestUsagePermission();
+                                  },
+                                ),
+                              if (!blockService.hasPermission &&
+                                  !blockService.hasAccessibilityPermission)
+                                const Divider(height: 1),
+                              if (!blockService.hasAccessibilityPermission)
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: Text(
+                                    'Accessibility Blocker Service',
+                                    style: bodyStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    'Required to close or lock blocked apps',
+                                    style: bodyStyle(
+                                      color: textMid,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  trailing: Icon(
+                                    CupertinoIcons.arrow_right_circle_fill,
+                                    color: primary,
+                                  ),
+                                  onTap: () {
+                                    HapticFeedback.selectionClick();
+                                    UsageStatsService.requestAccessibilityPermission();
+                                  },
+                                ),
+                            ],
+                          ),
+                        ).animate().fadeIn(duration: 400.ms),
+
+                      // Section Title
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Tracked Apps',
+                            style: headingStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      // App list
+                      if (blockService.limits.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(40),
+                          alignment: Alignment.center,
+                          child: Column(
+                            children: [
+                              Icon(
+                                CupertinoIcons.app_badge_fill,
+                                size: 64,
+                                color: textMid.withValues(alpha: 0.3),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No app limits set yet.',
+                                style: bodyStyle(color: textMid, fontSize: 15),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        ...blockService.limits.map((limit) {
+                          final isApproaching = limit.progress >= 0.8;
+                          final isBlocked = limit.isBlocked;
+
+                          const detailText = 'Entire App Blocked';
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: surface.withValues(
+                                alpha: isDarkMode ? 0.4 : 0.8,
+                              ),
+                              borderRadius: BorderRadius.circular(cardRadius),
+                              border: Border.all(
+                                color: isBlocked
+                                    ? Colors.redAccent.withValues(alpha: 0.3)
+                                    : textDark.withValues(alpha: 0.05),
+                                width: 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.02),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
                                 ),
                               ],
                             ),
-                          ),
-                        ),
-                      ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1, end: 0);
-                    }),
+                            child: InkWell(
+                              onTap: () => _showEditLimitBottomSheet(limit),
+                              borderRadius: BorderRadius.circular(cardRadius),
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Row(
+                                            children: [
+                                              FutureBuilder<AppInfo?>(
+                                                future:
+                                                    InstalledApps.getAppInfo(
+                                                      limit.packageName,
+                                                    ),
+                                                builder: (context, snapshot) {
+                                                  final hasIcon =
+                                                      snapshot.hasData &&
+                                                      snapshot.data?.icon !=
+                                                          null;
+                                                  return Container(
+                                                    width: 42,
+                                                    height: 42,
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          (isBlocked
+                                                                  ? Colors
+                                                                        .redAccent
+                                                                  : isApproaching
+                                                                  ? Colors
+                                                                        .orangeAccent
+                                                                  : primary)
+                                                              .withValues(
+                                                                alpha: 0.1,
+                                                              ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                    ),
+                                                    child: hasIcon
+                                                        ? ClipRRect(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  12,
+                                                                ),
+                                                            child: Image.memory(
+                                                              snapshot
+                                                                  .data!
+                                                                  .icon!,
+                                                              fit: BoxFit.cover,
+                                                            ),
+                                                          )
+                                                        : Icon(
+                                                            CupertinoIcons
+                                                                .lock_fill,
+                                                            color: isBlocked
+                                                                ? Colors
+                                                                      .redAccent
+                                                                : isApproaching
+                                                                ? Colors
+                                                                      .orangeAccent
+                                                                : primary,
+                                                            size: 20,
+                                                          ),
+                                                  );
+                                                },
+                                              ),
+                                              const SizedBox(width: 14),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      limit.appName,
+                                                      style: bodyStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 16,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      limit.packageName,
+                                                      style: bodyStyle(
+                                                        color: textMid,
+                                                        fontSize: 12,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              '${limit.usedMinutes} / ${limit.limitMinutes}m',
+                                              style: headingStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                                color: isBlocked
+                                                    ? Colors.redAccent
+                                                    : isApproaching
+                                                    ? Colors.orangeAccent
+                                                    : textDark,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: isBlocked
+                                                    ? Colors.redAccent
+                                                          .withValues(
+                                                            alpha: 0.1,
+                                                          )
+                                                    : Colors.green.withValues(
+                                                        alpha: 0.1,
+                                                      ),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                isBlocked
+                                                    ? 'Blocked'
+                                                    : 'Active',
+                                                style: bodyStyle(
+                                                  color: isBlocked
+                                                      ? Colors.redAccent
+                                                      : Colors.green,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 10,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      detailText,
+                                      style: bodyStyle(
+                                        fontSize: 12,
+                                        color: textMid,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: LinearProgressIndicator(
+                                        value: limit.progress,
+                                        minHeight: 6,
+                                        backgroundColor: textMid.withValues(
+                                          alpha: 0.1,
+                                        ),
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              isBlocked
+                                                  ? Colors.redAccent
+                                                  : isApproaching
+                                                  ? Colors.orangeAccent
+                                                  : primary,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1, end: 0);
+                        }),
 
-                  const SizedBox(height: 80), // bottom margin
-                ],
-              ),
+                      const SizedBox(height: 80), // bottom margin
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-    );
+          ),
+        );
       },
     );
   }

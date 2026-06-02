@@ -69,10 +69,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlin {
-        jvmToolchain(17)
-    }
-
     defaultConfig {
         applicationId = "com.example.blockit"
         minSdk = 29
@@ -88,6 +84,10 @@ android {
             isShrinkResources = false
         }
     }
+}
+
+kotlin {
+    jvmToolchain(17)
 }
 
 flutter {
