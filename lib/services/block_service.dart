@@ -21,10 +21,14 @@ class BlockService extends ChangeNotifier {
   }
 
   Future<void> _init() async {
-    await checkPermission();
-    await checkAccessibilityPermission();
+    // Check permissions in parallel (don't block each other)
+    await Future.wait([
+      checkPermission(),
+      checkAccessibilityPermission(),
+    ]);
     await loadLimits();
-    await updateUsage();
+    // Defer heavy native usage stats call — don't block initial render
+    Future.microtask(() => updateUsage());
   }
 
   Future<void> checkPermission() async {
@@ -161,6 +165,7 @@ class BlockService extends ChangeNotifier {
     // Persist blocked packages list for native BlockAccessibilityService to read
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_blockedPackagesKey, blockedPackages);
+    await _saveLimitsToDisk();
 
     notifyListeners();
   }

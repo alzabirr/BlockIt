@@ -44,16 +44,25 @@ class MyTaskHandler extends TaskHandler {
         final List<AppLimit> limits = decoded.map((item) => AppLimit.fromJson(item)).toList();
 
         List<String> blockedPackages = [];
+        List<AppLimit> updatedLimits = [];
         for (var limit in limits) {
           final usageMs = todayUsage[limit.packageName] ?? 0;
           final usedMins = (usageMs / 1000 / 60).round();
-          if (usedMins >= limit.limitMinutes) {
+          final isBlocked = usedMins >= limit.limitMinutes;
+          
+          updatedLimits.add(limit.copyWith(
+            usedMinutes: usedMins,
+            isBlocked: isBlocked,
+          ));
+
+          if (isBlocked) {
             blockedPackages.add(limit.packageName);
           }
         }
 
-        // Write blocked packages to SharedPreferences
+        // Write blocked packages and updated limits to SharedPreferences
         await prefs.setStringList('blocked_packages', blockedPackages);
+        await prefs.setString('app_limits', jsonEncode(updatedLimits.map((l) => l.toJson()).toList()));
       }
     } catch (e) {
       print('Error in background repeat task: $e');
@@ -110,21 +119,30 @@ void main() async {
     ),
   );
 
-  // Start foreground task service
-  if (!await FlutterForegroundTask.isRunningService) {
-    await FlutterForegroundTask.startService(
-      notificationTitle: 'Screen Guard Active',
-      notificationText: 'Monitoring your daily app limits...',
-      callback: startCallback,
-    );
-  }
-
+  // Run app immediately — don't block on service startup
   runApp(
     ChangeNotifierProvider(
       create: (_) => BlockService(),
       child: const NoScrollApp(),
     ),
   );
+
+  // Start foreground task service after UI is rendered (fire-and-forget)
+  _startForegroundServiceIfNeeded();
+}
+
+Future<void> _startForegroundServiceIfNeeded() async {
+  try {
+    if (!await FlutterForegroundTask.isRunningService) {
+      await FlutterForegroundTask.startService(
+        notificationTitle: 'Screen Guard Active',
+        notificationText: 'Monitoring your daily app limits...',
+        callback: startCallback,
+      );
+    }
+  } catch (e) {
+    print('Failed to start foreground service: $e');
+  }
 }
 
 class NoScrollApp extends StatelessWidget {
