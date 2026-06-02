@@ -83,17 +83,11 @@ class _SetLimitScreenState extends State<SetLimitScreen> {
     final existingLimitIndex = blockService.limits.indexWhere((l) => l.packageName == app.packageName);
     
     double initialLimitMinutes = 60.0;
-    String currentBlockingMode = 'shorts_reels';
-    bool isCurious = false;
-    double scrollLimit = 3.0;
-    String currentAction = 'close_player';
+    String currentAction = 'exit_app';
 
     if (existingLimitIndex >= 0) {
       final existing = blockService.limits[existingLimitIndex];
       initialLimitMinutes = existing.limitMinutes.toDouble();
-      currentBlockingMode = existing.blockingMode;
-      isCurious = existing.isCuriousMode;
-      scrollLimit = existing.maxScrolls.toDouble();
       currentAction = existing.actionType;
     }
 
@@ -205,87 +199,7 @@ class _SetLimitScreenState extends State<SetLimitScreen> {
                         
                         const Divider(height: 32),
 
-                        // 2. Restriction Scope Selector
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Restriction Scope', style: bodyStyle(fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ChoiceChip(
-                                label: Text('Shorts & Reels Only', style: bodyStyle(color: currentBlockingMode == 'shorts_reels' ? Colors.white : textDark)),
-                                selected: currentBlockingMode == 'shorts_reels',
-                                selectedColor: primary,
-                                onSelected: (val) {
-                                  if (val) setModalState(() => currentBlockingMode = 'shorts_reels');
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: ChoiceChip(
-                                label: Text('Block Entire App', style: bodyStyle(color: currentBlockingMode == 'all' ? Colors.white : textDark)),
-                                selected: currentBlockingMode == 'all',
-                                selectedColor: primary,
-                                onSelected: (val) {
-                                  if (val) setModalState(() => currentBlockingMode = 'all');
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const Divider(height: 32),
-
-                        // 3. Curious Mode (Shorts Only)
-                        if (currentBlockingMode == 'shorts_reels') ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Curious Mode', style: bodyStyle(fontWeight: FontWeight.bold)),
-                                  Text('Allow scroll limit before block', style: bodyStyle(color: textMid, fontSize: 12)),
-                                ],
-                              ),
-                              Switch(
-                                value: isCurious,
-                                activeColor: primary,
-                                onChanged: (val) {
-                                  setModalState(() => isCurious = val);
-                                },
-                              ),
-                            ],
-                          ),
-                          if (isCurious) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('Max Scrolls: ${scrollLimit.round()}', style: bodyStyle(color: primary)),
-                              ],
-                            ),
-                            Slider(
-                              value: scrollLimit,
-                              min: 1,
-                              max: 20,
-                              divisions: 19,
-                              activeColor: accent,
-                              inactiveColor: accent.withValues(alpha: 0.2),
-                              onChanged: (val) {
-                                setModalState(() => scrollLimit = val);
-                              },
-                            ),
-                          ],
-                          const Divider(height: 32),
-                        ],
-
-                        // 4. Action Type dropdown
+                        // 2. Action Type dropdown
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -302,7 +216,6 @@ class _SetLimitScreenState extends State<SetLimitScreen> {
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           ),
                           items: [
-                            DropdownMenuItem(value: 'close_player', child: Text('Close video (Go Back)', style: bodyStyle())),
                             DropdownMenuItem(value: 'exit_app', child: Text('Exit App (Go Home)', style: bodyStyle())),
                             DropdownMenuItem(value: 'lock_screen', child: Text('Lock Screen (API 28+)', style: bodyStyle())),
                           ],
@@ -345,9 +258,9 @@ class _SetLimitScreenState extends State<SetLimitScreen> {
                                     app.packageName,
                                     app.name,
                                     sliderValue.round(),
-                                    blockingMode: currentBlockingMode,
-                                    isCuriousMode: isCurious,
-                                    maxScrolls: scrollLimit.round(),
+                                    blockingMode: 'all',
+                                    isCuriousMode: false,
+                                    maxScrolls: 0,
                                     actionType: currentAction,
                                   );
                                   HapticFeedback.mediumImpact();

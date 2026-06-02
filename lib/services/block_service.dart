@@ -65,28 +65,28 @@ class BlockService extends ChangeNotifier {
         packageName: 'com.facebook.katana',
         appName: 'Facebook',
         limitMinutes: 60,
-        blockingMode: 'shorts_reels',
+        blockingMode: 'all',
         isCuriousMode: false,
         maxScrolls: 3,
-        actionType: 'close_player',
+        actionType: 'exit_app',
       ),
       AppLimit(
         packageName: 'com.google.android.youtube',
         appName: 'YouTube',
         limitMinutes: 60,
-        blockingMode: 'shorts_reels',
+        blockingMode: 'all',
         isCuriousMode: false,
         maxScrolls: 3,
-        actionType: 'close_player',
+        actionType: 'exit_app',
       ),
       AppLimit(
         packageName: 'com.instagram.android',
         appName: 'Instagram',
         limitMinutes: 60,
-        blockingMode: 'shorts_reels',
+        blockingMode: 'all',
         isCuriousMode: false,
         maxScrolls: 3,
-        actionType: 'close_player',
+        actionType: 'exit_app',
       ),
     ];
     _saveLimitsToDisk();
@@ -102,18 +102,18 @@ class BlockService extends ChangeNotifier {
     String packageName,
     String appName,
     int limitMinutes, {
-    String blockingMode = 'shorts_reels',
+    String blockingMode = 'all',
     bool isCuriousMode = false,
     int maxScrolls = 3,
-    String actionType = 'close_player',
+    String actionType = 'exit_app',
   }) async {
     final index = _limits.indexWhere((l) => l.packageName == packageName);
     if (index >= 0) {
       _limits[index] = _limits[index].copyWith(
         appName: appName,
         limitMinutes: limitMinutes,
-        blockingMode: blockingMode,
-        isCuriousMode: isCuriousMode,
+        blockingMode: 'all',
+        isCuriousMode: false,
         maxScrolls: maxScrolls,
         actionType: actionType,
       );
@@ -122,8 +122,8 @@ class BlockService extends ChangeNotifier {
         packageName: packageName,
         appName: appName,
         limitMinutes: limitMinutes,
-        blockingMode: blockingMode,
-        isCuriousMode: isCuriousMode,
+        blockingMode: 'all',
+        isCuriousMode: false,
         maxScrolls: maxScrolls,
         actionType: actionType,
       ));

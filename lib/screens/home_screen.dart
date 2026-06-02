@@ -111,9 +111,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _showEditLimitBottomSheet(AppLimit limit) {
     HapticFeedback.mediumImpact();
     double sliderValue = limit.limitMinutes.toDouble();
-    String currentBlockingMode = limit.blockingMode;
-    bool isCurious = limit.isCuriousMode;
-    double scrollLimit = limit.maxScrolls.toDouble();
     String currentAction = limit.actionType;
 
     final blockService = context.read<BlockService>();
@@ -198,87 +195,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         
                         const Divider(height: 32),
 
-                        // 2. Blocking Mode Selector
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Restriction Scope', style: bodyStyle(fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ChoiceChip(
-                                label: Text('Shorts & Reels Only', style: bodyStyle(color: currentBlockingMode == 'shorts_reels' ? Colors.white : textDark)),
-                                selected: currentBlockingMode == 'shorts_reels',
-                                selectedColor: primary,
-                                onSelected: (val) {
-                                  if (val) setModalState(() => currentBlockingMode = 'shorts_reels');
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: ChoiceChip(
-                                label: Text('Block Entire App', style: bodyStyle(color: currentBlockingMode == 'all' ? Colors.white : textDark)),
-                                selected: currentBlockingMode == 'all',
-                                selectedColor: primary,
-                                onSelected: (val) {
-                                  if (val) setModalState(() => currentBlockingMode = 'all');
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const Divider(height: 32),
-
-                        // 3. Curious Mode Switch (Only applicable if blocking Mode is shorts_reels)
-                        if (currentBlockingMode == 'shorts_reels') ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Curious Mode', style: bodyStyle(fontWeight: FontWeight.bold)),
-                                  Text('Allow scroll limit before block', style: bodyStyle(color: textMid, fontSize: 12)),
-                                ],
-                              ),
-                              Switch(
-                                value: isCurious,
-                                activeColor: primary,
-                                onChanged: (val) {
-                                  setModalState(() => isCurious = val);
-                                },
-                              ),
-                            ],
-                          ),
-                          if (isCurious) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('Max Scrolls: ${scrollLimit.round()}', style: bodyStyle(color: primary)),
-                              ],
-                            ),
-                            Slider(
-                              value: scrollLimit,
-                              min: 1,
-                              max: 20,
-                              divisions: 19,
-                              activeColor: accent,
-                              inactiveColor: accent.withValues(alpha: 0.2),
-                              onChanged: (val) {
-                                setModalState(() => scrollLimit = val);
-                              },
-                            ),
-                          ],
-                          const Divider(height: 32),
-                        ],
-
-                        // 4. Action Type dropdown/selector
+                        // 2. Action Type dropdown/selector
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -295,7 +212,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           ),
                           items: [
-                            DropdownMenuItem(value: 'close_player', child: Text('Close video (Go Back)', style: bodyStyle())),
                             DropdownMenuItem(value: 'exit_app', child: Text('Exit App (Go Home)', style: bodyStyle())),
                             DropdownMenuItem(value: 'lock_screen', child: Text('Lock Screen (API 28+)', style: bodyStyle())),
                           ],
@@ -349,9 +265,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     limit.packageName,
                                     limit.appName,
                                     sliderValue.round(),
-                                    blockingMode: currentBlockingMode,
-                                    isCuriousMode: isCurious,
-                                    maxScrolls: scrollLimit.round(),
+                                    blockingMode: 'all',
+                                    isCuriousMode: false,
+                                    maxScrolls: 0,
                                     actionType: currentAction,
                                   );
                                   HapticFeedback.mediumImpact();
@@ -650,7 +566,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'Please grant these system permissions so NoScroll can track usage and block Reels/Shorts.',
+                            'Please grant these system permissions so NoScroll can track usage and block apps after their limits.',
                             style: bodyStyle(height: 1.4, fontSize: 13),
                           ),
                           const SizedBox(height: 16),
@@ -671,7 +587,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             ListTile(
                               contentPadding: EdgeInsets.zero,
                               title: Text('Accessibility Blocker Service', style: bodyStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('Required to detect and block short videos scrolling', style: bodyStyle(color: textMid, fontSize: 12)),
+                              subtitle: Text('Required to close or lock blocked apps', style: bodyStyle(color: textMid, fontSize: 12)),
                               trailing: Icon(CupertinoIcons.arrow_right_circle_fill, color: primary),
                               onTap: () {
                                 HapticFeedback.selectionClick();
@@ -716,15 +632,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       final isApproaching = limit.progress >= 0.8;
                       final isBlocked = limit.isBlocked;
                       
-                      String detailText = '';
-                      if (limit.blockingMode == 'shorts_reels') {
-                        detailText = 'Shorts/Reels Blocked';
-                        if (limit.isCuriousMode) {
-                          detailText += ' (Curious Mode: Max ${limit.maxScrolls} scrolls)';
-                        }
-                      } else {
-                        detailText = 'Entire App Blocked';
-                      }
+                      const detailText = 'Entire App Blocked';
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 16),
@@ -784,9 +692,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                           ),
                                                         )
                                                       : Icon(
-                                                          limit.blockingMode == 'shorts_reels'
-                                                              ? CupertinoIcons.videocam_fill
-                                                              : CupertinoIcons.lock_fill,
+                                                          CupertinoIcons.lock_fill,
                                                           color: isBlocked
                                                               ? Colors.redAccent
                                                               : isApproaching

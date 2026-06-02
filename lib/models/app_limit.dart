@@ -4,10 +4,10 @@ class AppLimit {
   final int limitMinutes;
   final int usedMinutes;
   final bool isBlocked;
-  final String blockingMode; // 'shorts_reels' or 'all'
+  final String blockingMode; // 'all'
   final bool isCuriousMode;
   final int maxScrolls;
-  final String actionType; // 'close_player', 'exit_app', 'lock_screen'
+  final String actionType; // 'exit_app', 'lock_screen'
 
   AppLimit({
     required this.packageName,
@@ -15,10 +15,10 @@ class AppLimit {
     required this.limitMinutes,
     this.usedMinutes = 0,
     this.isBlocked = false,
-    this.blockingMode = 'shorts_reels',
+    this.blockingMode = 'all',
     this.isCuriousMode = false,
     this.maxScrolls = 3,
-    this.actionType = 'close_player',
+    this.actionType = 'exit_app',
   });
 
   double get progress => limitMinutes > 0 ? (usedMinutes / limitMinutes).clamp(0.0, 1.0) : 0.0;
@@ -68,10 +68,10 @@ class AppLimit {
       limitMinutes: json['limitMinutes'] as int,
       usedMinutes: json['usedMinutes'] as int? ?? 0,
       isBlocked: json['isBlocked'] as bool? ?? false,
-      blockingMode: json['blockingMode'] as String? ?? 'shorts_reels',
-      isCuriousMode: json['isCuriousMode'] as bool? ?? false,
+      blockingMode: 'all',
+      isCuriousMode: false,
       maxScrolls: json['maxScrolls'] as int? ?? 3,
-      actionType: json['actionType'] as String? ?? 'close_player',
+      actionType: (json['actionType'] as String?) == 'lock_screen' ? 'lock_screen' : 'exit_app',
     );
   }
 }

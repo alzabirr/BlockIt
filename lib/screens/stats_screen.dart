@@ -279,7 +279,7 @@ class _StatsScreenState extends State<StatsScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              limit.blockingMode == 'shorts_reels' ? 'Shorts/Reels Block' : 'Full App Block',
+                              'Full App Block',
                               style: bodyStyle(color: textMid, fontSize: 12),
                             ),
                             Text(
