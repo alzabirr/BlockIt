@@ -37,58 +37,64 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: bgLight,
-      body: Stack(
-        children: [
-          // Screen content
-          IndexedStack(
-            index: _currentIndex,
-            children: _screens,
-          ),
+    return ValueListenableBuilder<bool>(
+      valueListenable: darkModeNotifier,
+      builder: (context, isDark, _) {
+        return Scaffold(
+          backgroundColor: bgLight,
+          resizeToAvoidBottomInset: false,
+          body: Stack(
+            children: [
+              // Screen content
+              IndexedStack(
+                index: _currentIndex,
+                children: _screens,
+              ),
 
-          // Floating Glassmorphic Bottom Navigation Bar
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 24,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(30),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                child: Container(
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: surface.withOpacity(isDarkMode ? 0.6 : 0.85),
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(
-                      color: textDark.withOpacity(0.08),
-                      width: 1.2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 24,
-                        offset: const Offset(0, 8),
+              // Floating Glassmorphic Bottom Navigation Bar
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 24,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(30),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                    child: Container(
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: surface.withOpacity(isDarkMode ? 0.6 : 0.85),
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(
+                          color: textDark.withOpacity(0.08),
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildNavItem(0, CupertinoIcons.house_fill, 'Home'),
-                      _buildNavItem(1, CupertinoIcons.chart_bar_fill, 'Stats'),
-                      _buildNavItem(2, CupertinoIcons.plus_circle_fill, 'Add Limit'),
-                      _buildNavItem(3, CupertinoIcons.flame_fill, 'Challenge'),
-                      _buildNavItem(4, CupertinoIcons.gear_solid, 'Settings'),
-                    ],
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildNavItem(0, CupertinoIcons.house_fill, 'Home'),
+                          _buildNavItem(1, CupertinoIcons.chart_bar_fill, 'Stats'),
+                          _buildNavItem(2, CupertinoIcons.plus, 'Add Limit'),
+                          _buildNavItem(3, CupertinoIcons.flame_fill, 'Challenge'),
+                          _buildNavItem(4, CupertinoIcons.gear_solid, 'Settings'),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

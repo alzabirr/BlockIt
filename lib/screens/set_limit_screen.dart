@@ -37,17 +37,56 @@ class _SetLimitScreenState extends State<SetLimitScreen> {
 
   Future<void> _loadInstalledApps() async {
     try {
-      // Get all apps, requesting icons
+      // Get all apps (including system apps like YouTube, Chrome, etc)
       final apps = await InstalledApps.getInstalledApps(
-        excludeSystemApps: true,
+        excludeSystemApps: false,
         withIcon: true,
       );
+
+      // Filter out internal non-user-facing system packages to keep the list clean
+      final userFacingApps = apps.where((app) {
+        final pkg = app.packageName.toLowerCase();
+        
+        // Explicitly allow well-known user-facing pre-installed Google/System apps
+        if (pkg.contains('youtube') || 
+            pkg.contains('chrome') || 
+            pkg.contains('maps') || 
+            pkg.contains('gallery') ||
+            pkg.contains('camera') ||
+            pkg.contains('browser') ||
+            pkg.contains('vending') || // Google Play Store
+            pkg.contains('com.google.android.gm') || // Gmail
+            pkg.contains('com.google.android.apps.photos')) { // Photos
+          return true;
+        }
+
+        // Filter out core system processes and background services
+        if (pkg == 'android' ||
+            pkg.startsWith('com.android.providers.') ||
+            pkg.startsWith('com.android.systemui') ||
+            pkg.startsWith('com.android.inputmethod.') ||
+            pkg.startsWith('com.google.android.inputmethod.') ||
+            pkg.startsWith('com.android.server.') ||
+            pkg.startsWith('com.android.kernel') ||
+            pkg.startsWith('com.google.android.overlay') ||
+            pkg.startsWith('com.google.android.ext.services') ||
+            pkg.startsWith('com.google.android.packageinstaller') ||
+            pkg.contains('telephony') ||
+            pkg.contains('bluetooth') ||
+            pkg.contains('keychain') ||
+            pkg.contains('wallpaper')) {
+          return false;
+        }
+        return true;
+      }).toList();
+
       // Sort alphabetically
-      apps.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      userFacingApps.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      
       if (mounted) {
         setState(() {
-          _apps = apps;
-          _filteredApps = apps;
+          _apps = userFacingApps;
+          _filteredApps = userFacingApps;
           _isLoading = false;
         });
       }

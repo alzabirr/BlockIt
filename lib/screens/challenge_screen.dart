@@ -148,7 +148,29 @@ class _ChallengeScreenState extends State<ChallengeScreen>
   }
 
   // ── Completed weeks ────────────────────────────────────────────────
-  int get _completedWeeks => (_checkInList.length / 7).floor();
+  int get _completedWeeks {
+    int completed = 0;
+    final now = DateTime.now();
+    final startStr = _storage.getSetting('challenge_start_date', now.toIso8601String()) as String;
+    final startDate = DateTime.parse(startStr);
+    final startLocalDate = DateTime(startDate.year, startDate.month, startDate.day);
+    for (int w = 0; w < 6; w++) {
+      bool weekCompleted = true;
+      for (int d = 1; d <= 7; d++) {
+        final dayNum = w * 7 + d;
+        final targetDate = startLocalDate.add(Duration(days: dayNum - 1));
+        final targetStr = '${targetDate.year}-${targetDate.month}-${targetDate.day}';
+        if (!_checkInList.contains(targetStr)) {
+          weekCompleted = false;
+          break;
+        }
+      }
+      if (weekCompleted) {
+        completed++;
+      }
+    }
+    return completed;
+  }
 
   // ── Daily motivational quote (changes each day) ───────────────────
   String get _todayQuote {
@@ -157,30 +179,43 @@ class _ChallengeScreenState extends State<ChallengeScreen>
   }
 
   void _checkIn() {
-    HapticFeedback.heavyImpact();
     final now = DateTime.now();
     final todayStr = '${now.year}-${now.month}-${now.day}';
+    _toggleCheckIn(todayStr, _challengeDay);
+  }
 
-    if (!_checkInList.contains(todayStr)) {
-      _checkInList.add(todayStr);
+  void _toggleCheckIn(String dateStr, int dayNum) {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      if (_checkInList.contains(dateStr)) {
+        _checkInList.remove(dateStr);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Removed check-in for Day $dayNum'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } else {
+        _checkInList.add(dateStr);
+        _showConfetti = true;
+        _confettiController.forward(from: 0);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 Day $dayNum checked in! Streak: ${_calculateStreak()} 🔥'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: challengeColor,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
       _storage.saveSetting('challenge_check_ins', _checkInList);
 
-      setState(() {
-        _isCheckedInToday = true;
-        _showConfetti = true;
-      });
-
-      _confettiController.forward(from: 0);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              '🎉 Day $_challengeDay done! Streak: ${_calculateStreak()} 🔥'),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: challengeColor,
-        ),
-      );
-    }
+      final now = DateTime.now();
+      final todayStr = '${now.year}-${now.month}-${now.day}';
+      _isCheckedInToday = _checkInList.contains(todayStr);
+    });
   }
 
   void _resetChallenge() {
@@ -530,18 +565,34 @@ class _ChallengeScreenState extends State<ChallengeScreen>
                                       dayNum == _challengeDay;
                                   // Check if this calendar day was completed
                                   final now = DateTime.now();
-                                  final startDate = now.subtract(
-                                      Duration(days: _challengeDay - 1));
-                                  final targetDate = startDate.add(
+                                  final startStr = _storage.getSetting('challenge_start_date', now.toIso8601String()) as String;
+                                  final startDate = DateTime.parse(startStr);
+                                  final startLocalDate = DateTime(startDate.year, startDate.month, startDate.day);
+                                  final targetDate = startLocalDate.add(
                                       Duration(days: dayNum - 1));
                                   final targetStr =
                                       '${targetDate.year}-${targetDate.month}-${targetDate.day}';
-                                  final isCompleted =
-                                      _checkInList.contains(targetStr) ||
-                                          dayNum < _challengeDay;
+                                  
+                                  final isCompleted = _checkInList.contains(targetStr);
+                                  final todayLocalDate = DateTime(now.year, now.month, now.day);
+                                  final isPast = targetDate.isBefore(todayLocalDate);
+                                  final isFuture = targetDate.isAfter(todayLocalDate);
 
                                   return Expanded(
                                     child: GestureDetector(
+                                      onTap: () {
+                                        if (isFuture) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text("You cannot check in for future days!"),
+                                              behavior: SnackBarBehavior.floating,
+                                              duration: Duration(seconds: 1),
+                                            ),
+                                          );
+                                          return;
+                                        }
+                                        _toggleCheckIn(targetStr, dayNum);
+                                      },
                                       child: AnimatedContainer(
                                         duration:
                                             const Duration(milliseconds: 300),
@@ -553,8 +604,10 @@ class _ChallengeScreenState extends State<ChallengeScreen>
                                               ? challengeColor.withOpacity(0.28)
                                               : isCurrent
                                                   ? primary.withOpacity(0.15)
-                                                  : surface.withOpacity(
-                                                      isDarkMode ? 0.3 : 0.75),
+                                                  : isPast
+                                                      ? Colors.red.withOpacity(0.05)
+                                                      : surface.withOpacity(
+                                                          isDarkMode ? 0.3 : 0.75),
                                           borderRadius:
                                               BorderRadius.circular(10),
                                           border: Border.all(
@@ -563,8 +616,10 @@ class _ChallengeScreenState extends State<ChallengeScreen>
                                                 : isCompleted
                                                     ? challengeColor
                                                         .withOpacity(0.5)
-                                                    : textDark.withOpacity(
-                                                        0.07),
+                                                    : isPast
+                                                        ? Colors.red.withOpacity(0.2)
+                                                        : textDark.withOpacity(
+                                                            0.07),
                                             width: isCurrent ? 2 : 1,
                                           ),
                                         ),
@@ -573,18 +628,27 @@ class _ChallengeScreenState extends State<ChallengeScreen>
                                             ? Icon(CupertinoIcons.checkmark,
                                                 size: 12,
                                                 color: challengeColor)
-                                            : Text(
-                                                '$dayNum',
-                                                style: bodyStyle(
-                                                    fontSize: 11,
-                                                    fontWeight: isCurrent
-                                                        ? FontWeight.bold
-                                                        : FontWeight.w400,
-                                                    color: isCurrent
-                                                        ? primary
-                                                        : textDark.withOpacity(
-                                                            0.5)),
-                                              ),
+                                            : isPast
+                                                ? Text(
+                                                    '$dayNum',
+                                                    style: bodyStyle(
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.w400,
+                                                        color: Colors.red.withOpacity(0.5),
+                                                    ).copyWith(decoration: TextDecoration.lineThrough),
+                                                  )
+                                                : Text(
+                                                    '$dayNum',
+                                                    style: bodyStyle(
+                                                        fontSize: 11,
+                                                        fontWeight: isCurrent
+                                                            ? FontWeight.bold
+                                                            : FontWeight.w400,
+                                                        color: isCurrent
+                                                            ? primary
+                                                            : textDark.withOpacity(
+                                                                0.5)),
+                                                  ),
                                       ),
                                     ),
                                   );

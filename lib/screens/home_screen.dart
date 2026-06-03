@@ -496,12 +496,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           const detailText = 'Entire App Blocked';
 
                           return Container(
-                            margin: const EdgeInsets.only(bottom: 16),
+                            margin: const EdgeInsets.only(bottom: 10),
                             decoration: BoxDecoration(
                               color: surface.withValues(
                                 alpha: isDarkMode ? 0.4 : 0.8,
                               ),
-                              borderRadius: BorderRadius.circular(cardRadius),
+                              borderRadius: BorderRadius.circular(cardRadius - 4),
                               border: Border.all(
                                 color: isBlocked
                                     ? Colors.redAccent.withValues(alpha: 0.3)
@@ -511,16 +511,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withValues(alpha: 0.02),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
                             child: InkWell(
                               onTap: () => _showEditLimitBottomSheet(limit),
-                              borderRadius: BorderRadius.circular(cardRadius),
+                              borderRadius: BorderRadius.circular(cardRadius - 4),
                               child: Padding(
-                                padding: const EdgeInsets.all(20),
+                                padding: const EdgeInsets.all(12),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -542,8 +542,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       snapshot.data?.icon !=
                                                           null;
                                                   return Container(
-                                                    width: 42,
-                                                    height: 42,
+                                                    width: 36,
+                                                    height: 36,
                                                     decoration: BoxDecoration(
                                                       color:
                                                           (isBlocked
@@ -558,14 +558,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                               ),
                                                       borderRadius:
                                                           BorderRadius.circular(
-                                                            12,
+                                                            10,
                                                           ),
                                                     ),
                                                     child: hasIcon
                                                         ? ClipRRect(
                                                             borderRadius:
                                                                 BorderRadius.circular(
-                                                                  12,
+                                                                  10,
                                                                 ),
                                                             child: Image.memory(
                                                               snapshot
@@ -584,12 +584,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                                 ? Colors
                                                                       .orangeAccent
                                                                 : primary,
-                                                            size: 20,
+                                                            size: 16,
                                                           ),
                                                   );
                                                 },
                                               ),
-                                              const SizedBox(width: 14),
+                                              const SizedBox(width: 12),
                                               Expanded(
                                                 child: Column(
                                                   crossAxisAlignment:
@@ -600,18 +600,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       style: bodyStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 16,
-                                                      ),
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                    const SizedBox(height: 2),
-                                                    Text(
-                                                      limit.packageName,
-                                                      style: bodyStyle(
-                                                        color: textMid,
-                                                        fontSize: 12,
+                                                        fontSize: 15,
                                                       ),
                                                       maxLines: 1,
                                                       overflow:
@@ -628,9 +617,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                               CrossAxisAlignment.end,
                                           children: [
                                             Text(
-                                              '${limit.usedMinutes} / ${limit.limitMinutes}m',
+                                              '${limit.usedMinutes}/${limit.limitMinutes}m',
                                               style: headingStyle(
-                                                fontSize: 16,
+                                                fontSize: 14,
                                                 fontWeight: FontWeight.bold,
                                                 color: isBlocked
                                                     ? Colors.redAccent
@@ -639,12 +628,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                     : textDark,
                                               ),
                                             ),
-                                            const SizedBox(height: 4),
+                                            const SizedBox(height: 2),
                                             Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 4,
+                                                    horizontal: 6,
+                                                    vertical: 2,
                                                   ),
                                               decoration: BoxDecoration(
                                                 color: isBlocked
@@ -656,7 +645,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                         alpha: 0.1,
                                                       ),
                                                 borderRadius:
-                                                    BorderRadius.circular(8),
+                                                    BorderRadius.circular(6),
                                               ),
                                               child: Text(
                                                 isBlocked
@@ -667,7 +656,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       ? Colors.redAccent
                                                       : Colors.green,
                                                   fontWeight: FontWeight.bold,
-                                                  fontSize: 10,
+                                                  fontSize: 9,
                                                 ),
                                               ),
                                             ),
@@ -675,21 +664,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      detailText,
-                                      style: bodyStyle(
-                                        fontSize: 12,
-                                        color: textMid,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
+                                    const SizedBox(height: 10),
                                     ClipRRect(
                                       borderRadius: BorderRadius.circular(4),
                                       child: LinearProgressIndicator(
                                         value: limit.progress,
-                                        minHeight: 6,
+                                        minHeight: 4,
                                         backgroundColor: textMid.withValues(
                                           alpha: 0.1,
                                         ),
