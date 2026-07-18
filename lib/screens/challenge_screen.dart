@@ -1,65 +1,17 @@
+import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:provider/provider.dart';
+import '../services/block_service.dart';
+import '../services/usage_stats_service.dart';
 import '../storage/hive_storage.dart';
 import '../themes/app_theme.dart';
+import '../widgets/ambient_background.dart';
 
-// Daily motivational quotes to avoid doomscrolling
-const List<String> _motivationalQuotes = [
-  "Your attention is your most valuable resource. Guard it fiercely.",
-  "Every scroll you resist is a moment you choose yourself.",
-  "Real life happens outside the feed. Go live it.",
-  "The best things in life are found by looking up, not at a screen.",
-  "Boredom is the birthplace of creativity. Embrace it.",
-  "You are not missing out. You are opting in — to yourself.",
-  "Less scrolling, more living. One day at a time.",
-  "The world is far more interesting than any algorithm.",
-  "Silence your feed. Amplify your focus.",
-  "Every great journey begins with putting the phone down.",
-  "Peace of mind is just one tab close away.",
-  "Your future self is grateful for every scroll you skipped.",
-  "Be present. The reel will always wait. Your life will not.",
-  "Reclaim your hours. Reclaim your power.",
-  "Disconnect to reconnect — with yourself.",
-  "The highlight reel is not real life.",
-  "Deep work beats shallow scrolling, every time.",
-  "Today's discipline is tomorrow's freedom.",
-  "You control the feed, not the other way around.",
-  "Attention is the new currency. Spend it wisely.",
-  "Stillness is productive. Let the mind breathe.",
-  "Your story is written offline.",
-  "Challenge accepted. Scroll rejected.",
-  "Boredom is okay. It passes. Unlike wasted hours.",
-  "A moment of rest is worth a thousand reels.",
-  "One week stronger. Keep going.",
-  "Halfway there. You're building a habit that lasts.",
-  "Eyes up. The best views have no filter.",
-  "Your focus is a muscle. You're training it daily.",
-  "Weeks of effort. A lifetime of clarity.",
-  "The algorithm stops here. You are in control.",
-  "42 days. A new you. Keep your streak alive.",
-  "Routine beats motivation. You've found yours.",
-  "Every day offline is a day fully lived.",
-  "Mental clarity isn't found in a feed. It's earned.",
-  "Stand firm. The urge to scroll will pass.",
-  "Progress, not perfection. Keep checking in.",
-  "You've come too far to turn back now.",
-  "Almost there. The best version of you is waiting.",
-  "Last stretch. Finish what you started.",
-  "42 days complete. Legend. Now make it a lifestyle.",
-];
-
-const List<String> _weeklyBadges = [
-  '🌱 Week 1: Seedling', // Week 1 complete
-  '🔥 Week 2: Ignited', // Week 2 complete
-  '💪 Week 3: Resilient', // Week 3 complete
-  '🧠 Week 4: Focused', // Week 4 complete
-  '🦅 Week 5: Free Mind', // Week 5 complete
-  '🏆 Week 6: Champion', // Week 6 complete
-];
+enum FocusState { idle, running, paused, success, failed }
 
 class ChallengeScreen extends StatefulWidget {
   const ChallengeScreen({super.key});
@@ -69,17 +21,36 @@ class ChallengeScreen extends StatefulWidget {
 }
 
 class _ChallengeScreenState extends State<ChallengeScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final HiveStorage _storage = HiveStorage();
-  int _challengeDay = 1;
-  bool _isCheckedInToday = false;
-  List<String> _checkInList = [];
+  
+  // Stats
+  int _focusPoints = 0;
+  int _completedSessions = 0;
+  int _streak = 0;
+  String _lastSuccessDate = '';
+
+  // Timer state
+  FocusState _state = FocusState.idle;
+  int _selectedMinutes = 1;
+  int _secondsRemaining = 1 * 60;
+  Timer? _timer;
+  Timer? _distractionCheckTimer;
+
+  // Background distraction checking
+  Map<String, int> _initialUsage = {};
+  String _failedReason = '';
+
+  // Confetti / Animations
   bool _showConfetti = false;
   late AnimationController _confettiController;
+  late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
+    _loadStats();
+
     _confettiController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2500),
@@ -91,155 +62,243 @@ class _ChallengeScreenState extends State<ChallengeScreen>
         }
       }
     });
-    _loadChallengeData();
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
+    _distractionCheckTimer?.cancel();
     _confettiController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
-  void _loadChallengeData() {
-    final now = DateTime.now();
-    final todayStr = '${now.year}-${now.month}-${now.day}';
+  Future<void> _loadStats() async {
+    _focusPoints = _storage.getSetting('focus_points', 0) as int;
+    _completedSessions = _storage.getSetting('focus_sessions_count', 0) as int;
+    _streak = _storage.getSetting('focus_streak', 0) as int;
+    _lastSuccessDate = _storage.getSetting('focus_last_success_date', '') as String;
 
-    String? startStr =
-        _storage.getSetting('challenge_start_date', null) as String?;
-    if (startStr == null) {
-      startStr = now.toIso8601String();
-      _storage.saveSetting('challenge_start_date', startStr);
-    }
-    final startDate = DateTime.parse(startStr);
-    final diffDays = now.difference(startDate).inDays + 1;
-    _challengeDay = diffDays.clamp(1, 42);
+    final questStateStr = _storage.getSetting('focus_quest_state', 'idle') as String;
+    if (questStateStr == 'running') {
+      final endTimestamp = _storage.getSetting('focus_quest_end_timestamp', 0) as int;
+      _selectedMinutes = _storage.getSetting('focus_quest_selected_minutes', 1) as int;
 
-    final List<dynamic> checkIns =
-        _storage.getSetting('challenge_check_ins', []) as List<dynamic>;
-    _checkInList = checkIns.map((e) => e.toString()).toList();
-    _isCheckedInToday = _checkInList.contains(todayStr);
+      final rawUsage = _storage.getSetting('focus_quest_initial_usage', {}) as Map;
+      _initialUsage = rawUsage.map((k, v) => MapEntry(k.toString(), v as int));
 
-    if (mounted) setState(() {});
-  }
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final remaining = (endTimestamp - now) ~/ 1000;
 
-  // ── Correct streak calculation ──────────────────────────────────────
-  int _calculateStreak() {
-    if (_checkInList.isEmpty) return 0;
-    final now = DateTime.now();
-    int streak = 0;
-    DateTime cursor = DateTime(now.year, now.month, now.day);
-
-    // If checked in today, start from today; otherwise start from yesterday
-    final todayStr = '${cursor.year}-${cursor.month}-${cursor.day}';
-    if (!_checkInList.contains(todayStr)) {
-      cursor = cursor.subtract(const Duration(days: 1));
-    }
-
-    while (true) {
-      final s = '${cursor.year}-${cursor.month}-${cursor.day}';
-      if (_checkInList.contains(s)) {
-        streak++;
-        cursor = cursor.subtract(const Duration(days: 1));
+      if (remaining > 0) {
+        setState(() {
+          _state = FocusState.running;
+          _secondsRemaining = remaining;
+        });
+        _resumeTimer();
       } else {
-        break;
+        await _checkOfflineQuestCompletion();
       }
+    } else {
+      if (mounted) setState(() {});
     }
-    return streak;
   }
 
-  // ── Completed weeks ────────────────────────────────────────────────
-  int get _completedWeeks {
-    int completed = 0;
-    final now = DateTime.now();
-    final startStr = _storage.getSetting('challenge_start_date', now.toIso8601String()) as String;
-    final startDate = DateTime.parse(startStr);
-    final startLocalDate = DateTime(startDate.year, startDate.month, startDate.day);
-    for (int w = 0; w < 6; w++) {
-      bool weekCompleted = true;
-      for (int d = 1; d <= 7; d++) {
-        final dayNum = w * 7 + d;
-        final targetDate = startLocalDate.add(Duration(days: dayNum - 1));
-        final targetStr = '${targetDate.year}-${targetDate.month}-${targetDate.day}';
-        if (!_checkInList.contains(targetStr)) {
-          weekCompleted = false;
-          break;
+  Future<bool> _hasCheated() async {
+    final blockService = Provider.of<BlockService>(context, listen: false);
+    final limits = blockService.limits;
+
+    try {
+      final currentUsage = await UsageStatsService.getTodayUsage();
+      for (var limit in limits) {
+        final pkg = limit.packageName;
+        final initialMin = _initialUsage[pkg] ?? 0;
+        final currentMin = currentUsage[pkg] ?? 0;
+
+        if (currentMin > initialMin + 5000) {
+          return true;
         }
       }
-      if (weekCompleted) {
-        completed++;
-      }
+    } catch (e) {
+      // Ignore
     }
-    return completed;
+    return false;
   }
 
-  // ── Daily motivational quote (changes each day) ───────────────────
-  String get _todayQuote {
-    final dayIndex = (_challengeDay - 1).clamp(0, _motivationalQuotes.length - 1);
-    return _motivationalQuotes[dayIndex];
-  }
-
-  void _checkIn() {
-    final now = DateTime.now();
-    final todayStr = '${now.year}-${now.month}-${now.day}';
-    _toggleCheckIn(todayStr, _challengeDay);
-  }
-
-  void _toggleCheckIn(String dateStr, int dayNum) {
-    HapticFeedback.mediumImpact();
-    setState(() {
-      if (_checkInList.contains(dateStr)) {
-        _checkInList.remove(dateStr);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Removed check-in for Day $dayNum'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.redAccent,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+  void _resumeTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_secondsRemaining > 0) {
+        setState(() {
+          _secondsRemaining--;
+        });
       } else {
-        _checkInList.add(dateStr);
-        _showConfetti = true;
-        _confettiController.forward(from: 0);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('🎉 Day $dayNum checked in! Streak: ${_calculateStreak()} 🔥'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: challengeColor,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        _completeFocusQuest();
       }
-      _storage.saveSetting('challenge_check_ins', _checkInList);
+    });
 
-      final now = DateTime.now();
-      final todayStr = '${now.year}-${now.month}-${now.day}';
-      _isCheckedInToday = _checkInList.contains(todayStr);
+    _distractionCheckTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      final cheated = await _hasCheated();
+      if (cheated) {
+        _failFocusQuest('You opened a blocked app during your Focus Quest.');
+      }
     });
   }
 
-  void _resetChallenge() {
+  Future<void> _checkOfflineQuestCompletion() async {
+    final cheated = await _hasCheated();
+    if (cheated) {
+      _storage.saveSetting('focus_quest_state', 'failed');
+      setState(() {
+        _state = FocusState.failed;
+        _failedReason = 'You opened a blocked app while the app was closed.';
+        _streak = 0;
+        _storage.saveSetting('focus_streak', _streak);
+      });
+    } else {
+      _completeFocusQuest();
+    }
+  }
+
+  String get _levelName {
+    if (_focusPoints < 50) return '🌱 Seedling';
+    if (_focusPoints < 150) return '⏱️ Time Weaver';
+    if (_focusPoints < 300) return '⚡ Focus Warrior';
+    return '🌌 Zen Master';
+  }
+
+  int get _pointsForCurrentLevel {
+    if (_focusPoints < 50) return 0;
+    if (_focusPoints < 150) return 50;
+    if (_focusPoints < 300) return 150;
+    return 300;
+  }
+
+  int get _pointsForNextLevel {
+    if (_focusPoints < 50) return 50;
+    if (_focusPoints < 150) return 150;
+    if (_focusPoints < 300) return 300;
+    return 1000; // max/infinite tier representation
+  }
+
+  int get _pointsReward {
+    switch (_selectedMinutes) {
+      case 1:
+        return 10;
+      case 5:
+        return 25;
+      case 10:
+        return 50;
+      default:
+        return 10;
+    }
+  }
+
+  Future<void> _startFocusQuest() async {
+    HapticFeedback.mediumImpact();
+    
+    // Capture current usage stats for all apps
+    try {
+      _initialUsage = await UsageStatsService.getTodayUsage();
+    } catch (e) {
+      _initialUsage = {};
+    }
+
+    final endTimestamp = DateTime.now().millisecondsSinceEpoch + (_selectedMinutes * 60 * 1000);
+    _storage.saveSetting('focus_quest_state', 'running');
+    _storage.saveSetting('focus_quest_end_timestamp', endTimestamp);
+    _storage.saveSetting('focus_quest_selected_minutes', _selectedMinutes);
+    _storage.saveSetting('focus_quest_initial_usage', _initialUsage);
+
+    setState(() {
+      _state = FocusState.running;
+      _secondsRemaining = _selectedMinutes * 60;
+      _failedReason = '';
+    });
+
+    _resumeTimer();
+  }
+
+  void _failFocusQuest(String reason) {
+    _timer?.cancel();
+    _distractionCheckTimer?.cancel();
+    HapticFeedback.heavyImpact();
+
+    _storage.saveSetting('focus_quest_state', 'failed');
+
+    setState(() {
+      _state = FocusState.failed;
+      _failedReason = reason;
+      // Reset streak on failure
+      _streak = 0;
+      _storage.saveSetting('focus_streak', _streak);
+    });
+  }
+
+  void _completeFocusQuest() {
+    _timer?.cancel();
+    _distractionCheckTimer?.cancel();
+    HapticFeedback.vibrate();
+
+    _storage.saveSetting('focus_quest_state', 'success');
+
+    final today = DateTime.now();
+
+    // Calculate streak
+    int newStreak = _streak;
+    if (_lastSuccessDate.isNotEmpty) {
+      final lastDate = DateTime.tryParse(_lastSuccessDate) ?? today.subtract(const Duration(days: 2));
+      final difference = today.difference(lastDate).inDays;
+      if (difference == 1) {
+        newStreak++;
+      } else if (difference > 1) {
+        newStreak = 1;
+      }
+    } else {
+      newStreak = 1;
+    }
+
+    _focusPoints += _pointsReward;
+    _completedSessions += 1;
+    _streak = newStreak;
+    _lastSuccessDate = today.toIso8601String();
+
+    _storage.saveSetting('focus_points', _focusPoints);
+    _storage.saveSetting('focus_sessions_count', _completedSessions);
+    _storage.saveSetting('focus_streak', _streak);
+    _storage.saveSetting('focus_last_success_date', _lastSuccessDate);
+
+    setState(() {
+      _state = FocusState.success;
+      _showConfetti = true;
+    });
+
+    _confettiController.forward(from: 0);
+  }
+
+  void _giveUp() {
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: const Text('Reset Challenge?'),
+        title: const Text('Give up Focus Quest?'),
         content: const Text(
-            'This will delete all check-in history and start the 6-Week Challenge from Day 1.'),
+          'Leaving now will break your streak and fail the quest.',
+        ),
         actions: [
           CupertinoDialogAction(
-            child: const Text('Cancel'),
+            child: const Text('Keep Focusing'),
             onPressed: () => Navigator.pop(context),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
-            child: const Text('Reset'),
+            child: const Text('Give Up'),
             onPressed: () {
-              HapticFeedback.mediumImpact();
-              _storage.saveSetting(
-                  'challenge_start_date', DateTime.now().toIso8601String());
-              _storage.saveSetting('challenge_check_ins', <String>[]);
               Navigator.pop(context);
-              _loadChallengeData();
+              _failFocusQuest('You chose to give up.');
             },
           ),
         ],
@@ -247,474 +306,549 @@ class _ChallengeScreenState extends State<ChallengeScreen>
     );
   }
 
+  void _resetToIdle() {
+    _storage.saveSetting('focus_quest_state', 'idle');
+    setState(() {
+      _state = FocusState.idle;
+      _secondsRemaining = _selectedMinutes * 60;
+    });
+  }
+
+  String _formatDuration(int totalSeconds) {
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: darkModeNotifier,
       builder: (context, isDark, _) {
-    final completionPercent = (_checkInList.length / 42.0).clamp(0.0, 1.0);
-    final streak = _calculateStreak();
+        final levelProgress = (_focusPoints - _pointsForCurrentLevel) /
+            (_pointsForNextLevel - _pointsForCurrentLevel);
 
-    return Scaffold(
-      backgroundColor: bgLight,
-      body: Stack(
-        children: [
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 16),
-
-                  // ── Header ───────────────────────────────────────────
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Challenge',
-                            style: headingStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: challengeColor),
-                          ).animate().fadeIn(duration: 400.ms),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Reclaim your attention span',
-                            style: bodyStyle(color: textMid, fontSize: 14),
-                          ).animate().fadeIn(duration: 400.ms, delay: 100.ms),
-                        ],
-                      ),
-                      IconButton(
-                        icon: Icon(CupertinoIcons.arrow_counterclockwise,
-                            color: textMid, size: 24),
-                        onPressed: _resetChallenge,
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // ── Scrollable content ────────────────────────────────
-                  Expanded(
-                    child: ListView(
-                      physics: const BouncingScrollPhysics(),
+        return Scaffold(
+          backgroundColor: bgLight,
+          body: Stack(
+            children: [
+              AmbientBackground(
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        const SizedBox(height: 16),
 
-                        // ── Main stats card ────────────────────────────
+                        // Header / Title
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Focus Quest',
+                                  style: headingStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
+                                ).animate().fadeIn(duration: 400.ms),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Stay distraction-free, earn rank',
+                                  style: bodyStyle(color: textMid, fontSize: 14),
+                                ).animate().fadeIn(duration: 400.ms, delay: 100.ms),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    '🔥 $_streak',
+                                    style: bodyStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Level Progress Card
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
-                                challengeColor.withOpacity(0.16),
-                                primary.withOpacity(0.06),
+                                primary.withValues(alpha: 0.12),
+                                accent.withValues(alpha: 0.04),
                               ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
                             borderRadius: BorderRadius.circular(cardRadius),
                             border: Border.all(
-                              color: challengeColor.withOpacity(0.2),
-                              width: 1.5,
+                              color: primary.withValues(alpha: 0.15),
+                              width: 1,
                             ),
                           ),
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Top row: week + circular progress
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Week ${((_challengeDay - 1) / 7).floor() + 1} of 6',
+                                        _levelName,
                                         style: headingStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.bold,
-                                            color: challengeColor),
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        'Day $_challengeDay of 42',
+                                        '$_focusPoints XP Total • $_completedSessions Quests Completed',
                                         style: bodyStyle(
-                                            color: textDark.withOpacity(0.7),
-                                            fontSize: 14),
-                                      ),
-                                    ],
-                                  ),
-                                  Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      SizedBox(
-                                        width: 72,
-                                        height: 72,
-                                        child: CircularProgressIndicator(
-                                          value: completionPercent,
-                                          strokeWidth: 6,
-                                          backgroundColor:
-                                              challengeColor.withOpacity(0.1),
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                  challengeColor),
+                                          color: textMid,
+                                          fontSize: 12,
                                         ),
-                                      ),
-                                      Text(
-                                        '${(completionPercent * 100).round()}%',
-                                        style: headingStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold),
                                       ),
                                     ],
                                   ),
                                 ],
                               ),
-                              const Divider(height: 28),
-                              // Stat counters
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceAround,
-                                children: [
-                                  _StatBox(
-                                      label: 'Completed',
-                                      value: '${_checkInList.length}',
-                                      color: challengeColor),
-                                  _StatBox(
-                                      label: 'Remaining',
-                                      value:
-                                          '${42 - _checkInList.length}',
-                                      color: textMid),
-                                  _StatBox(
-                                      label: 'Streak 🔥',
-                                      value: '$streak days',
-                                      color: Colors.orangeAccent),
-                                ],
+                              const SizedBox(height: 16),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: levelProgress.clamp(0.0, 1.0),
+                                  minHeight: 6,
+                                  backgroundColor: textMid.withValues(alpha: 0.1),
+                                  valueColor: AlwaysStoppedAnimation<Color>(primary),
+                                ),
                               ),
                             ],
                           ),
                         ).animate().fadeIn(duration: 400.ms),
 
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
 
-                        // ── Today's motivational quote ─────────────────
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 16),
-                          decoration: BoxDecoration(
-                            color: surface.withOpacity(isDarkMode ? 0.45 : 0.9),
-                            borderRadius: BorderRadius.circular(cardRadius),
-                            border: Border.all(
-                                color: textDark.withOpacity(0.06)),
+                        // Timer Circle View
+                        Expanded(
+                          child: Align(
+                            alignment: const Alignment(0, -0.6),
+                            child: _buildTimerContent(isDark),
                           ),
-                          child: Row(
-                            children: [
-                              Text('💬',
-                                  style: const TextStyle(fontSize: 22)),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  _todayQuote,
-                                  style: bodyStyle(
-                                      color: textDark.withOpacity(0.8),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      height: 1.5),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ).animate().fadeIn(duration: 450.ms, delay: 100.ms),
-
-                        const SizedBox(height: 16),
-
-                        // ── Weekly milestone badges ─────────────────────
-                        if (_completedWeeks > 0) ...[
-                          Text(
-                            'Milestones 🏅',
-                            style: headingStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            height: 44,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: _completedWeeks,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(width: 8),
-                              itemBuilder: (context, i) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color:
-                                      challengeColor.withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                      color:
-                                          challengeColor.withOpacity(0.3)),
-                                ),
-                                child: Text(
-                                  _weeklyBadges[i],
-                                  style: bodyStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: challengeColor),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-
-                        // ── Check in button ─────────────────────────────
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          onPressed: _isCheckedInToday ? null : _checkIn,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            width: double.infinity,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: _isCheckedInToday
-                                  ? Colors.grey.withOpacity(0.25)
-                                  : challengeColor,
-                              borderRadius:
-                                  BorderRadius.circular(buttonRadius),
-                              boxShadow: _isCheckedInToday
-                                  ? []
-                                  : [
-                                      BoxShadow(
-                                        color: challengeColor
-                                            .withOpacity(0.35),
-                                        blurRadius: 18,
-                                        offset: const Offset(0, 6),
-                                      )
-                                    ],
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              _isCheckedInToday
-                                  ? '✅ Checked in for Today'
-                                  : '🔥 Check In Today',
-                              style: bodyStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16),
-                            ),
-                          ),
-                        ).animate().fadeIn(duration: 500.ms, delay: 200.ms),
-
-                        const SizedBox(height: 28),
-
-                        // ── 6-Week grid with week labels ─────────────────
-                        Text(
-                          'Your 6-Week Path',
-                          style: headingStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(height: 16),
-
-                        ...List.generate(6, (weekIndex) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Week label
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      'Week ${weekIndex + 1}',
-                                      style: bodyStyle(
-                                          color: _completedWeeks > weekIndex
-                                              ? challengeColor
-                                              : textMid,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    if (_completedWeeks > weekIndex)
-                                      Text(
-                                        _weeklyBadges[weekIndex]
-                                            .split(' ')
-                                            .first,
-                                        style: const TextStyle(fontSize: 14),
-                                      ),
-                                    Expanded(
-                                      child: Container(
-                                        height: 1,
-                                        margin: const EdgeInsets.only(left: 8),
-                                        color: textDark.withOpacity(0.06),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // 7-day row for this week
-                              Row(
-                                children: List.generate(7, (dayInWeek) {
-                                  final dayNum =
-                                      weekIndex * 7 + dayInWeek + 1;
-                                  final isCurrent =
-                                      dayNum == _challengeDay;
-                                  // Check if this calendar day was completed
-                                  final now = DateTime.now();
-                                  final startStr = _storage.getSetting('challenge_start_date', now.toIso8601String()) as String;
-                                  final startDate = DateTime.parse(startStr);
-                                  final startLocalDate = DateTime(startDate.year, startDate.month, startDate.day);
-                                  final targetDate = startLocalDate.add(
-                                      Duration(days: dayNum - 1));
-                                  final targetStr =
-                                      '${targetDate.year}-${targetDate.month}-${targetDate.day}';
-                                  
-                                  final isCompleted = _checkInList.contains(targetStr);
-                                  final todayLocalDate = DateTime(now.year, now.month, now.day);
-                                  final isPast = targetDate.isBefore(todayLocalDate);
-                                  final isFuture = targetDate.isAfter(todayLocalDate);
-
-                                  return Expanded(
-                                    child: GestureDetector(
-                                      onTap: () {
-                                        if (isFuture) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text("You cannot check in for future days!"),
-                                              behavior: SnackBarBehavior.floating,
-                                              duration: Duration(seconds: 1),
-                                            ),
-                                          );
-                                          return;
-                                        }
-                                        _toggleCheckIn(targetStr, dayNum);
-                                      },
-                                      child: AnimatedContainer(
-                                        duration:
-                                            const Duration(milliseconds: 300),
-                                        margin: const EdgeInsets.only(
-                                            right: 6, bottom: 6),
-                                        height: 36,
-                                        decoration: BoxDecoration(
-                                          color: isCompleted
-                                              ? challengeColor.withOpacity(0.28)
-                                              : isCurrent
-                                                  ? primary.withOpacity(0.15)
-                                                  : isPast
-                                                      ? Colors.red.withOpacity(0.05)
-                                                      : surface.withOpacity(
-                                                          isDarkMode ? 0.3 : 0.75),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                          border: Border.all(
-                                            color: isCurrent
-                                                ? primary
-                                                : isCompleted
-                                                    ? challengeColor
-                                                        .withOpacity(0.5)
-                                                    : isPast
-                                                        ? Colors.red.withOpacity(0.2)
-                                                        : textDark.withOpacity(
-                                                            0.07),
-                                            width: isCurrent ? 2 : 1,
-                                          ),
-                                        ),
-                                        alignment: Alignment.center,
-                                        child: isCompleted
-                                            ? Icon(CupertinoIcons.checkmark,
-                                                size: 12,
-                                                color: challengeColor)
-                                            : isPast
-                                                ? Text(
-                                                    '$dayNum',
-                                                    style: bodyStyle(
-                                                        fontSize: 11,
-                                                        fontWeight: FontWeight.w400,
-                                                        color: Colors.red.withOpacity(0.5),
-                                                    ).copyWith(decoration: TextDecoration.lineThrough),
-                                                  )
-                                                : Text(
-                                                    '$dayNum',
-                                                    style: bodyStyle(
-                                                        fontSize: 11,
-                                                        fontWeight: isCurrent
-                                                            ? FontWeight.bold
-                                                            : FontWeight.w400,
-                                                        color: isCurrent
-                                                            ? primary
-                                                            : textDark.withOpacity(
-                                                                0.5)),
-                                                  ),
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-                          );
-                        }),
-
-                        const SizedBox(height: 100),
                       ],
                     ),
+                  ),
+                ),
+              ),
+
+              // Confetti overlay on check-in
+              if (_showConfetti)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: AnimatedBuilder(
+                      animation: _confettiController,
+                      builder: (context, _) {
+                        return CustomPaint(
+                          painter: _ConfettiPainter(
+                              _confettiController.value, _focusPoints),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTimerContent(bool isDark) {
+    final double progress = _state == FocusState.idle
+        ? 1.0
+        : (_secondsRemaining / (_selectedMinutes * 60));
+
+    switch (_state) {
+      case FocusState.idle:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Circular timer selector view
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 200,
+                  height: 200,
+                  child: CircularProgressIndicator(
+                    value: 1.0,
+                    strokeWidth: 4,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      textMid.withValues(alpha: 0.1),
+                    ),
+                  ),
+                ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$_selectedMinutes:00',
+                      style: headingStyle(
+                        fontSize: 48,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '+$_pointsReward XP reward',
+                      style: bodyStyle(
+                        color: primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 40),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [1, 5, 10].map((mins) {
+                final isSelected = _selectedMinutes == mins;
+                return GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    setState(() {
+                      _selectedMinutes = mins;
+                      _secondsRemaining = mins * 60;
+                    });
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? primary
+                          : primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isSelected ? primary : Colors.transparent,
+                      ),
+                    ),
+                    child: Text(
+                      '$mins min',
+                      style: bodyStyle(
+                        color: isSelected ? Colors.white : textDark,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+
+            const SizedBox(height: 32),
+
+            // Start Button
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: _startFocusQuest,
+              child: Container(
+                width: 200,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: primary,
+                  borderRadius: BorderRadius.circular(buttonRadius),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primary.withValues(alpha: 0.3),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    )
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  'Start Focus Quest',
+                  style: bodyStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+
+      case FocusState.running:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Circular Countdown Ring
+            AnimatedBuilder(
+              animation: _pulseController,
+              builder: (context, child) {
+                return Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: primary.withValues(alpha: 0.08 * _pulseController.value),
+                        blurRadius: 20,
+                        spreadRadius: 5,
+                      )
+                    ],
+                  ),
+                  child: child,
+                );
+              },
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 220,
+                    height: 220,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: progress, end: progress),
+                      duration: const Duration(milliseconds: 900),
+                      curve: Curves.easeInOut,
+                      builder: (context, value, _) {
+                        return CircularProgressIndicator(
+                          value: value,
+                          strokeWidth: 8,
+                          backgroundColor: primary.withValues(alpha: 0.08),
+                          valueColor: AlwaysStoppedAnimation<Color>(primary),
+                        );
+                      },
+                    ),
+                  ),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _formatDuration(_secondsRemaining),
+                        style: headingStyle(
+                          fontSize: 44,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Do not open blocked apps',
+                        style: bodyStyle(
+                          color: textMid,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-          ),
+            const SizedBox(height: 60),
 
-          // ── Confetti overlay on check-in ────────────────────────────
-          if (_showConfetti)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: AnimatedBuilder(
-                  animation: _confettiController,
-                  builder: (context, _) {
-                    return CustomPaint(
-                      painter: _ConfettiPainter(
-                          _confettiController.value, _challengeDay),
-                    );
-                  },
+            // Give Up Button
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: _giveUp,
+              child: Container(
+                width: 160,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(buttonRadius),
+                  border: Border.all(
+                    color: Colors.redAccent.withValues(alpha: 0.2),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  'Give Up',
+                  style: bodyStyle(
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
                 ),
               ),
             ),
-        ],
-      ),
-    );
-      },
-    );
+          ],
+        );
+
+      case FocusState.success:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Glowing Checkmark
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.green.withValues(alpha: 0.3),
+                  width: 2,
+                ),
+              ),
+              child: const Icon(
+                CupertinoIcons.checkmark_alt,
+                color: Colors.green,
+                size: 48,
+              ),
+            ).animate().scale(
+                  duration: 400.ms,
+                  curve: Curves.elasticOut,
+                ),
+            const SizedBox(height: 24),
+            Text(
+              'Quest Complete!',
+              style: headingStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'You earned +$_pointsReward XP!',
+              style: bodyStyle(
+                color: Colors.green,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 48),
+
+            // Continue Button
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: _resetToIdle,
+              child: Container(
+                width: 180,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: primary,
+                  borderRadius: BorderRadius.circular(buttonRadius),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  'Return to Quest',
+                  style: bodyStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+
+      case FocusState.failed:
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Warn Icon
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.redAccent.withValues(alpha: 0.3),
+                    width: 2,
+                  ),
+                ),
+                child: const Icon(
+                  CupertinoIcons.exclamationmark,
+                  color: Colors.redAccent,
+                  size: 48,
+                ),
+              ).animate().shake(duration: 400.ms),
+              const SizedBox(height: 24),
+              Text(
+                'Quest Failed!',
+                style: headingStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _failedReason,
+                textAlign: TextAlign.center,
+                style: bodyStyle(
+                  color: textMid,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 48),
+
+              // Retry Button
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: _resetToIdle,
+                child: Container(
+                  width: 180,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: primary,
+                    borderRadius: BorderRadius.circular(buttonRadius),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'Try Again',
+                    style: bodyStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+
+      default:
+        return const SizedBox.shrink();
+    }
   }
 }
 
-// ── Stat box sub-widget ────────────────────────────────────────────────
-class _StatBox extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-
-  const _StatBox(
-      {required this.label, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(value,
-            style: headingStyle(
-                fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-        const SizedBox(height: 4),
-        Text(label, style: bodyStyle(color: textMid, fontSize: 12)),
-      ],
-    );
-  }
-}
-
-// ── Confetti painter ───────────────────────────────────────────────────
+// Confetti painter
 class _ConfettiPainter extends CustomPainter {
   final double progress;
   final int seed;
@@ -750,7 +884,7 @@ class _ConfettiPainter extends CustomPainter {
       final x = startX + vx * size.width * progress;
       final y = -20.0 + vy * size.height * progress * 1.2;
 
-      paint.color = _colors[i % _colors.length].withOpacity(opacity);
+      paint.color = _colors[i % _colors.length].withValues(alpha: opacity);
 
       canvas.save();
       canvas.translate(x, y);
@@ -758,9 +892,10 @@ class _ConfettiPainter extends CustomPainter {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(
-              center: Offset.zero,
-              width: particleSize,
-              height: particleSize * 0.45),
+            center: Offset.zero,
+            width: particleSize,
+            height: particleSize * 0.45,
+          ),
           const Radius.circular(2),
         ),
         paint,
