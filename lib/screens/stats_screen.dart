@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../services/block_service.dart';
-import '../services/usage_stats_service.dart';
 import '../themes/app_theme.dart';
 import '../widgets/ambient_background.dart';
 import 'set_limit_screen.dart';
@@ -16,22 +15,6 @@ class StatsScreen extends StatefulWidget {
 }
 
 class _StatsScreenState extends State<StatsScreen> {
-  Map<String, int> _allUsage = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAllUsage();
-  }
-
-  Future<void> _loadAllUsage() async {
-    final usage = await UsageStatsService.getTodayUsage();
-    if (mounted) {
-      setState(() {
-        _allUsage = usage;
-      });
-    }
-  }
 
   void _showPeakHoursDetails(BuildContext context, int totalUsed) {
     final m = (totalUsed * 0.20).round();
